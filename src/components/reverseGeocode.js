@@ -1,11 +1,10 @@
-// v3: Service 인스턴스를 만들어서 reverseGeocode를 호출해야 함
+// v3: Service 인스턴스 생성 없이 정적 메서드를 직접 호출
 export function reverseGeocode(latlng) {
   return new Promise((resolve) => {
     const nv = window.naver?.maps;
-    if (!nv?.Service) return resolve("");
+    if (!nv?.Service?.reverseGeocode) return resolve("");
 
-    const svc = new nv.Service();
-    svc.reverseGeocode(
+    nv.Service.reverseGeocode(
       { coords: latlng, orders: "roadaddr,addr" },
       (status, response) => {
         if (status !== nv.Service.Status.OK) return resolve("");
