@@ -1,4 +1,4 @@
-// v3: 정적 메서드 직접 호출
+// reverseGeocode.js
 export function reverseGeocode(latlng) {
   return new Promise((resolve) => {
     const nv = window.naver?.maps;
@@ -11,19 +11,20 @@ export function reverseGeocode(latlng) {
         const r = res?.v2?.results?.[0];
         if (!r) return resolve("");
 
-        const name =
+        const text =
           r.roadAddress?.formatted ||
           r.jibunAddress?.formatted ||
           [
             r.region?.area1?.name,
             r.region?.area2?.name,
             r.region?.area3?.name,
+            r.region?.area4?.name,
             r.land?.name,
             r.land?.number1,
             r.land?.number2 ? `-${r.land.number2}` : "",
           ].filter(Boolean).join(" ");
 
-        resolve(name || "");
+        resolve(text || "");
       }
     );
   });
