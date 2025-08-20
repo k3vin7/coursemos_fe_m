@@ -1,47 +1,40 @@
-// 지도를 띄워 중심을 이동해 위치 선택하는 모달
-// props:
-//  - open: boolean
-//  - onClose(): void
-//  - onSelect({lat, lng, address}): void
-//  - initialCenter={{lat, lng}} (선택)
 import { useEffect, useRef, useState } from "react";
-import { useNaverLoader } from "./naverLoader.jsx";
-import { reverseGeocode } from "./reverseGeocode.js";
+import { useNaverLoader } from "../components/naverLoader";
+import { reverseGeocode } from "../components/reverseGeocode";
 
 export default function NaverMapPickerModal({
   open,
   onClose,
   onSelect,
-  initialCenter,
+  initialCenter, // {lat, lng}
+  title = "지도에서 위치 선택",
 }) {
-  const ready = useNaverLoader();
+  const [ready, setReady] = useState(false);
+  const [addr, setAddr] = useState("");
+  const [busy, setBusy] = useState(false);
+
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
-  const [address, setAddress] = useState("");
 
-  // 스와이프 차단: 모달 내부 인터랙션 시 상위 제스처 방지
+  // SDK 로드
   useEffect(() => {
     if (!open) return;
-    const el = mapDivRef.current;
-    if (!el) return;
-    const stop = (e) => e.stopPropagation();
-    el.addEventListener("touchstart", stop, { passive: true });
-    el.addEventListener("touchmove", stop, { passive: true });
-    el.addEventListener("touchend", stop, { passive: true });
-    el.addEventListener("mousedown", stop);
-    el.addEventListener("mousemove", stop);
-    el.addEventListener("mouseup", stop);
+    let cancelled = false;
+    (async () => {
+      try {
+        await useNaverLoader();
+        if (!cancelled) setReady(true);
+      } catch {
+        if (!cancelled) setReady(false);
+      }
+    })();
     return () => {
-      el.removeEventListener("touchstart", stop);
-      el.removeEventListener("touchmove", stop);
-      el.removeEventListener("touchend", stop);
-      el.removeEventListener("mousedown", stop);
-      el.removeEventListener("mousemove", stop);
-      el.removeEventListener("mouseup", stop);
+      cancelled = true;
     };
   }, [open]);
 
+  // 지도 초기화
   useEffect(() => {
     if (!open || !ready || !mapDivRef.current) return;
 
@@ -50,42 +43,36 @@ export default function NaverMapPickerModal({
       initialCenter?.lat ?? 37.5665,
       initialCenter?.lng ?? 126.9780
     );
+
     const map = new nv.Map(mapDivRef.current, {
       center,
       zoom: 14,
+      scaleControl: false,
       logoControl: false,
       mapDataControl: false,
-      scaleControl: false,
-      zoomControl: true,
-      zoomControlOptions: { position: nv.Position.RIGHT_CENTER },
     });
     mapRef.current = map;
 
-    const marker = new nv.Marker({
-      position: map.getCenter(),
-      map,
-      clickable: false,
-      icon: {
-        content:
-          '<div style="transform: translate(-50%,-100%); padding-bottom:4px;"><div style="width:14px;height:14px;border-radius:50%;background:#111;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.25)"></div></div>',
-      },
-    });
+    const marker = new nv.Marker({ position: center, map });
     markerRef.current = marker;
 
-    const onIdle = () => {
+    // 모달 표시 후 리사이즈 트리거
+    requestAnimationFrame(() => nv.Event.trigger(map, "resize"));
+
+    const onIdle = async () => {
       const c = map.getCenter();
       marker.setPosition(c);
-      reverseGeocode(c).then(setAddress);
+      setBusy(true);
+      const name = await reverseGeocode(c);
+      setAddr(name || "");
+      setBusy(false);
     };
-    nv.Event.addListener(map, "idle", onIdle);
 
-    // 첫 주소
-    reverseGeocode(map.getCenter()).then(setAddress);
+    nv.Event.addListener(map, "idle", onIdle);
+    onIdle();
 
     return () => {
-      nv.Event.clearListeners(map, "idle");
-      marker.setMap(null);
-      map.destroy();
+      nv.Event.clearInstanceListeners(map);
       mapRef.current = null;
       markerRef.current = null;
     };
@@ -93,32 +80,35 @@ export default function NaverMapPickerModal({
 
   if (!open) return null;
 
-  const handleSelect = () => {
-    const nv = window.naver.maps;
-    const c = mapRef.current.getCenter();
-    onSelect?.({ lat: c.y, lng: c.x, address });
-  };
-
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-        aria-hidden
-      />
-      <div className="relative z-10 w-[92vw] max-w-[860px] bg-white rounded-2xl shadow-xl border border-gray-200 p-4">
-        <div className="text-lg font-semibold mb-2">지도에서 위치 선택</div>
-        <div
-          ref={mapDivRef}
-          className="w-full h-[52vh] rounded-xl border border-gray-200 overflow-hidden"
-        />
-        <div className="mt-3">
-          <p className="text-sm text-gray-500">현재 중심 주소</p>
-          <p className="text-base font-medium text-gray-800 break-words">
-            {address || "주소를 불러오는 중..."}
-          </p>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50">
+      <div className="w-[92vw] max-w-[540px] bg-white rounded-3xl shadow-xl p-4">
+        <div className="relative">
+          <div className="absolute top-2 left-0 w-32 h-1 bg-pink-200 rounded-full" />
+          <h3 className="font-semibold text-lg pl-1">{title}</h3>
         </div>
-        <div className="mt-4 flex items-center justify-end gap-2">
+
+        <div className="mt-4">
+          {!ready ? (
+            <div className="w-full h-[52vh] rounded-xl border grid place-items-center text-sm text-gray-500">
+              네이버 지도 SDK 로딩 중…
+            </div>
+          ) : (
+            <div
+              ref={mapDivRef}
+              className="w-full h-[52vh] rounded-xl border border-gray-200"
+            />
+          )}
+        </div>
+
+        <div className="mt-3 text-xs text-gray-500">
+          <div className="font-medium text-gray-600">현재 중심 주소</div>
+          <div className="truncate">
+            {busy ? "주소를 불러오는 중…" : addr || "주소 없음"}
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onClose}
             className="px-4 h-10 rounded-xl bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 active:scale-95 transition"
@@ -126,8 +116,18 @@ export default function NaverMapPickerModal({
             취소
           </button>
           <button
-            onClick={handleSelect}
-            className="px-4 h-10 rounded-xl bg-[#111] text-white hover:brightness-110 active:scale-95 transition"
+            onClick={() => {
+              const map = mapRef.current;
+              if (!map) return;
+              const c = map.getCenter();
+              onSelect?.({
+                lat: c.lat(),
+                lng: c.lng(),
+                address: addr,
+              });
+              onClose?.();
+            }}
+            className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95 transition"
           >
             이 위치 선택
           </button>
