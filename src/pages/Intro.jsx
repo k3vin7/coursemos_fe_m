@@ -2,21 +2,22 @@ import { useRef } from "react";
 
 export default function Intro({ onSwipeRight, onSwipeLeft }) {
   const startX = useRef(null);
+  const locked = () => Boolean(window.__SWIPE_DISABLED);
 
   const handleTouchStart = (e) => {
+    if (locked()) { startX.current = null; return; }
     startX.current = e.touches[0].clientX;
   };
 
   const handleTouchEnd = (e) => {
+    if (locked()) { startX.current = null; return; }
     if (startX.current === null) return;
     const dx = e.changedTouches[0].clientX - startX.current;
     const threshold = 50;
 
-    if (dx > threshold) {
-      onSwipeRight?.();
-    } else if (dx < -threshold) {
-      onSwipeLeft?.();
-    }
+    if (dx > threshold) onSwipeRight?.();
+    else if (dx < -threshold) onSwipeLeft?.();
+
     startX.current = null;
   };
 
@@ -26,11 +27,9 @@ export default function Intro({ onSwipeRight, onSwipeLeft }) {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-
-
       {/* 오른쪽 스와이프 */}
+      <p className="absolute top-[12vh] right-0 px-2">추천 데이트 코스는 여기!!</p>
       <div className="absolute flex flex-col items-end top-[15vh] right-0">
-        <p className="px-2">추천 데이트 코스는 여기!!</p>
         <div className="flex items-center justify-center
         h-[5vh] w-[50vw] rounded-l-3xl bg-[#FABAE170] shadow-xl">
           <div className="flex items-center justify-center">
