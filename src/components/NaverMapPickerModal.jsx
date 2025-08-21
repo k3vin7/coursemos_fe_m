@@ -1,136 +1,152 @@
-import { useEffect, useRef, useState } from "react";
-import { useNaverLoader } from "../components/naverLoader";
-import { reverseGeocode } from "../components/reverseGeocode";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { loadNaverMaps } from "./naverLoader.jsx";
+import { reverseGeocode } from "./reverseGeocode.js";
 
 export default function NaverMapPickerModal({
   open,
   onClose,
   onSelect,
-  initialCenter, // {lat, lng}
+  initialCenter,
   title = "지도에서 위치 선택",
 }) {
-  const [ready, setReady] = useState(false);
-  const [addr, setAddr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [addr, setAddr] = useState({ display: "", road: "", jibun: "" });
 
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
 
-  // SDK 로드
+  // 모달 열릴 때만 페이지 스와이프 잠금(지도 안 제스처는 통과)
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await useNaverLoader();
-        if (!cancelled) setReady(true);
-      } catch {
-        if (!cancelled) setReady(false);
-      }
-    })();
+    const prevOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.dataset.swipeLock = "1";
     return () => {
-      cancelled = true;
+      document.documentElement.style.overflow = prevOverflow;
+      delete document.documentElement.dataset.swipeLock;
     };
   }, [open]);
 
-  // 지도 초기화
+  // 지도 밖에서만 이벤트 차단, 지도 영역은 그대로 통과
+  const blockOutside = useCallback((e) => {
+    const mapEl = mapDivRef.current;
+    if (!mapEl) return;
+    if (!mapEl.contains(e.target)) {
+      e.stopPropagation();
+      if (typeof e.preventDefault === "function") e.preventDefault();
+    }
+  }, []);
+
+  const updateAddress = async (latlng) => {
+    setBusy(true);
+    const r = await reverseGeocode(latlng);
+    setAddr({ display: r.jibun || "", road: "", jibun: r.jibun || "" }); // 지번만
+    setBusy(false);
+  };
+
   useEffect(() => {
-    if (!open || !ready || !mapDivRef.current) return;
+    if (!open) return;
+    let alive = true;
+    let dispose = () => {};
+    loadNaverMaps().then(() => {
+      if (!alive) return;
+      const nv = window.naver.maps;
+      const center =
+        initialCenter?.lat && initialCenter?.lng
+          ? new nv.LatLng(initialCenter.lat, initialCenter.lng)
+          : new nv.LatLng(37.5665, 126.9780);
 
-    const nv = window.naver.maps;
-    const center = new nv.LatLng(
-      initialCenter?.lat ?? 37.5665,
-      initialCenter?.lng ?? 126.9780
-    );
+      const map = new nv.Map(mapDivRef.current, { center, zoom: 16, minZoom: 7 });
+      mapRef.current = map;
 
-    const map = new nv.Map(mapDivRef.current, {
-      center,
-      zoom: 14,
-      scaleControl: false,
-      logoControl: false,
-      mapDataControl: false,
+      const marker = new nv.Marker({ position: center, map });
+      markerRef.current = marker;
+
+      updateAddress(center);
+
+      const idle = nv.Event.addListener(map, "idle", () => {
+        const c = map.getCenter();
+        marker.setPosition(c);
+        updateAddress(c);
+      });
+
+      // 모달 초기 1프레임 후 사이즈 보정(흰 화면 방지)
+      requestAnimationFrame(() => {
+        const el = mapDivRef.current;
+        if (el) map.setSize(new nv.Size(el.clientWidth || 360, el.clientHeight || 420));
+      });
+
+      dispose = () => {
+        nv.Event.removeListener(idle);
+        map.destroy();
+      };
     });
-    mapRef.current = map;
-
-    const marker = new nv.Marker({ position: center, map });
-    markerRef.current = marker;
-
-    // 모달 표시 후 리사이즈 트리거
-    requestAnimationFrame(() => nv.Event.trigger(map, "resize"));
-
-    const onIdle = async () => {
-      const c = map.getCenter();
-      marker.setPosition(c);
-      setBusy(true);
-      const name = await reverseGeocode(c);
-      setAddr(name || "");
-      setBusy(false);
-    };
-
-    nv.Event.addListener(map, "idle", onIdle);
-    onIdle();
-
-    return () => {
-      nv.Event.clearInstanceListeners(map);
-      mapRef.current = null;
-      markerRef.current = null;
-    };
-  }, [open, ready, initialCenter?.lat, initialCenter?.lng]);
+    return () => { alive = false; dispose(); };
+  }, [open, initialCenter]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50">
-      <div className="w-[92vw] max-w-[540px] bg-white rounded-3xl shadow-xl p-4">
-        <div className="relative">
-          <div className="absolute top-2 left-0 w-32 h-1 bg-pink-200 rounded-full" />
-          <h3 className="font-semibold text-lg pl-1">{title}</h3>
-        </div>
-
-        <div className="mt-4">
-          {!ready ? (
-            <div className="w-full h-[52vh] rounded-xl border grid place-items-center text-sm text-gray-500">
-              네이버 지도 SDK 로딩 중…
-            </div>
-          ) : (
-            <div
-              ref={mapDivRef}
-              className="w-full h-[52vh] rounded-xl border border-gray-200"
-            />
-          )}
-        </div>
-
-        <div className="mt-3 text-xs text-gray-500">
-          <div className="font-medium text-gray-600">현재 중심 주소</div>
-          <div className="truncate">
-            {busy ? "주소를 불러오는 중…" : addr || "주소 없음"}
-          </div>
-        </div>
-
-        <div className="mt-4 flex justify-end gap-2">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      onTouchStart={blockOutside}
+      onTouchMove={blockOutside}
+      onPointerDown={blockOutside}
+      onPointerMove={blockOutside}
+      onWheel={blockOutside}
+      onMouseDown={blockOutside}
+    >
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-[92vw] max-w-[720px] h-[70vh] bg-white rounded-2xl shadow-xl border border-gray-200 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{title}</h3>
           <button
             onClick={onClose}
-            className="px-4 h-10 rounded-xl bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 active:scale-95 transition"
+            className="px-3 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 active:scale-95 transition"
           >
-            취소
+            닫기
           </button>
-          <button
-            onClick={() => {
-              const map = mapRef.current;
-              if (!map) return;
-              const c = map.getCenter();
-              onSelect?.({
-                lat: c.lat(),
-                lng: c.lng(),
-                address: addr,
-              });
-              onClose?.();
-            }}
-            className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95 transition"
-          >
-            이 위치 선택
-          </button>
+        </div>
+
+        <div className="flex-1 relative">
+          <div ref={mapDivRef} className="absolute inset-0 touch-pan-x touch-pan-y" />
+          {/* 중앙 원 오버레이 제거됨 */}
+        </div>
+
+        <div className="p-4 border-t border-gray-100">
+          <div className="mb-3">
+            <div className="text-sm text-gray-500 mb-1">
+              {busy ? "주소 가져오는 중…" : "현재 중심 지번"}
+            </div>
+            <div className="text-base font-medium">
+              {addr.jibun || (busy ? "" : "")}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 h-10 rounded-xl bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 active:scale-95 transition"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => {
+                const c = mapRef.current.getCenter();
+                onSelect?.({
+                  lat: c.lat(),
+                  lng: c.lng(),
+                  addressRoad: "",          // 도로명 제거
+                  addressJibun: addr.jibun, // 지번만 전달
+                });
+                onClose?.();
+              }}
+              className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95 transition"
+            >
+              이 위치 선택
+            </button>
+          </div>
         </div>
       </div>
     </div>
