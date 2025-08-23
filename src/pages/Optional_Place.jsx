@@ -53,7 +53,7 @@ export default function Optional_Place({
         <h2 className="text-lg font-semibold text-gray-800 mb-4">만남의 장소는...</h2>
         <div className="mb-4">
           <div className="text-sm text-gray-500">{busy ? "주소 가져오는 중…" : "\u00A0"}</div>
-          <div className="text-base font-medium truncate">{addr || (busy ? "" : "주소 없음")}</div>
+          <div className="text-base font-medium truncate">{addr || (busy ? "" : "")}</div>
         </div>
         <div className="flex items-center justify-center">
           <button onClick={() => setOpen(true)} className="px-4 h-10 rounded-xl bg-indigo-500 text-white hover:opacity-90 active:scale-95 transition">
