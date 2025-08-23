@@ -30,7 +30,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인이면 처음부터 로그인 모달
   const [myOpen, setMyOpen] = useState(false);
 
-  // ★ 최소 수정 1: 마운트 직후 로그인 상태 재확인 → 모달 강제 오픈 보장
+  // ✅ (1) 첫 마운트 시 로그인 상태 재확인 → 모달 확실히 오픈/닫힘
   useEffect(() => {
     const ok = isLoggedIn();
     setAuthed(ok);
@@ -65,17 +65,16 @@ export default function App() {
   }, []);
 
   // ===== 스와이프 / 마우스 제스처 =====
+  // ✅ (2) 모달이 열려 있으면 제스처 무시 → 모달 아래 페이지가 안 넘어가게
   const onTouchStart = (e) => {
-    // ★ 최소 수정 2: 모달이 열려 있으면 제스처 무시
     if (authOpen || myOpen) return;
     const t = e.touches?.[0];
     if (!t) return;
     startXRef.current = t.clientX;
     startYRef.current = t.clientY;
   };
-
   const onTouchEnd = (e) => {
-    if (authOpen || myOpen) return; // ★
+    if (authOpen || myOpen) return;
     const t = e.changedTouches?.[0];
     if (!t) return;
     const dx = t.clientX - startXRef.current;
@@ -85,16 +84,14 @@ export default function App() {
       else go(index - 1);
     }
   };
-
   const onMouseDown = (e) => {
-    if (authOpen || myOpen) return; // ★
+    if (authOpen || myOpen) return;
     isMouseDownRef.current = true;
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
   };
-
   const onMouseUp = (e) => {
-    if (authOpen || myOpen) return; // ★
+    if (authOpen || myOpen) return;
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
     const dx = e.clientX - startXRef.current;
@@ -106,7 +103,7 @@ export default function App() {
   };
 
   // ===== 페이지 이동 =====
-  // ★ 최소 수정 3: prev 기준으로 dir 계산 + 결과(6) 진입 시 자동 호출
+  // ✅ (3-1) prev 기준으로 dir 계산(역방향/멈춤 방지) + RESULT 진입 시 자동 요청
   const go = (next) => {
     setIndex((prev) => {
       if (next === prev || next < 0 || next > 6) return prev;
@@ -119,8 +116,8 @@ export default function App() {
   };
 
   // ===== 추천 실행 =====
+  // ✅ (3-2) location은 서버 요구대로 "문자열"로 전송 (주소 있으면 주소, 없으면 "lat,lng")
   async function requestRecommendAndShow() {
-    // ★ 최소 수정 4: 이미 결과 화면이면 중복 setIndex(6) 방지
     if (index !== 6) {
       requestAnimationFrame(() => setIndex(6));
     }
@@ -132,16 +129,19 @@ export default function App() {
       const useDate = date ?? now;
       const useHour = time?.hour ?? now.getHours();
       const useMinute = time?.minute ?? 0;
+
       const lat = place?.lat ?? 37.5665;
       const lng = place?.lng ?? 126.9780;
       const addr = (place?.address || "").trim();
       const locationStr = addr ? addr : `${lat},${lng}`;
+
       const payload = {
         date: useDate.toISOString().slice(0, 10),
         time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
-        location: locationStr,        // ★ 객체 → 문자열
-        etc: (etc || "").trim(),      // 서버가 'note'를 요구한다면 등호 오른쪽 키만 note로 바꿔도 됨
+        location: locationStr,      // ← 문자열
+        etc: (etc || "").trim(),    // 서버가 note를 요구하면 키 이름만 note로 바꾸면 됨
       };
+
       const data = await postRecommend(payload);
       setResult(data);
     } catch (e) {
@@ -160,6 +160,7 @@ export default function App() {
             <Intro
               onStartLeft={() => go(0)}
               onStartRight={() => go(2)}
+              // Intro 내부에서 이 두 프롭으로 “로그인/마이페이지” 버튼 토글
               showUserButton={!(authOpen || myOpen)}
               isAuthed={authed}
               onUserButtonClick={() =>
