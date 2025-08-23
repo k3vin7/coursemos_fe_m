@@ -144,12 +144,14 @@ export default function App() {
       const lat = place?.lat ?? 37.5665;
       const lng = place?.lng ?? 126.9780;
       const addr = (place?.address || "").trim();
-      const location = addr ? addr : `${lat},${lng}`;
+      const location = addr ? addr : `${lng},${lat}`;
 
       const payload = {
         date: useDate.toISOString().slice(0, 10),
         time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
         location,
+        lat,
+        lng,
         etc: (etc || "").trim(),
       };
 
