@@ -3,7 +3,7 @@ import { useRef } from "react";
 export default function Intro({
   onSwipeRight,
   onSwipeLeft,
-  // ⬇️ 추가된 프롭(기본값으로 안전하게 동작)
+  // 버튼/모달 제어용 프롭
   showUserButton = true,
   isAuthed = false,
   onUserButtonClick,
@@ -32,21 +32,22 @@ export default function Intro({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* ✅ 우상단 사용자 버튼 */}
+      {/* 우상단 사용자 버튼(로그인/마이페이지) */}
       {showUserButton && (
         <button
+          type="button"
+          data-swipe-ignore
           onClick={onUserButtonClick}
-          className="absolute top-4 right-4 h-10 px-3 rounded-xl border border-gray-200 bg-white/90 shadow text-sm font-medium hover:bg-white active:scale-95"
+          className="absolute top-4 right-4 z-[60] h-10 px-3 rounded-xl border border-gray-200 bg-white/90 shadow text-sm font-medium hover:bg-white active:scale-95"
         >
           {isAuthed ? "마이페이지" : "로그인"}
         </button>
       )}
 
-      {/* 오른쪽 스와이프 */}
+      {/* 오른쪽 스와이프 안내 */}
       <p className="absolute top-[12vh] right-0 px-2">추천 데이트 코스는 여기!!</p>
       <div className="absolute flex flex-col items-end top-[15vh] right-0">
-        <div className="flex items-center justify-center
-        h-[5vh] w-[50vw] rounded-l-3xl bg-[#FABAE170] shadow-xl">
+        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-l-3xl bg-[#FABAE170] shadow-xl">
           <div className="flex items-center justify-center">
             <p className="mr-3 font-semibold text-gray-500">오른쪽으로 스와이프!</p>
             <img src="/RightArrow.png" alt="오른쪽스와이프" />
@@ -56,14 +57,13 @@ export default function Intro({
 
       {/* 워터마크 */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <img src="/watermark.png" alt="워터마크"/>
+        <img src="/watermark.png" alt="워터마크" />
       </div>
 
-      {/* 왼쪽 스와이프 */}
+      {/* 왼쪽 스와이프 안내 */}
       <div className="absolute flex flex-col items-start bottom-[15vh] left-0">
         <p className="px-2">간단한 정보 입력으로 맞춤 코스 추천!</p>
-        <div className="flex items-center justify-center
-        h-[5vh] w-[50vw] rounded-r-3xl bg-[#ADC3FF70] shadow-xl">
+        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-r-3xl bg-[#ADC3FF70] shadow-xl">
           <div className="flex items-center justify-center">
             <img src="/LeftArrow.png" alt="왼쪽스와이프" />
             <p className="ml-3 font-semibold text-gray-500">왼쪽으로 스와이프!</p>

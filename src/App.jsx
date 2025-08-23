@@ -30,7 +30,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인이면 처음부터 로그인 모달
   const [myOpen, setMyOpen] = useState(false);
 
-  // ✅ (1) 첫 마운트 시 로그인 상태 재확인 → 모달 확실히 오픈/닫힘
+  // 첫 마운트 동기화(확실하게 모달/버튼 상태 맞춤)
   useEffect(() => {
     const ok = isLoggedIn();
     setAuthed(ok);
@@ -50,7 +50,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  // 다른 탭에서 토큰이 바뀌면 반영 + 사라지면 로그인 모달
+  // 다른 탭에서 토큰 변경 반영
   useEffect(() => {
     const onStorage = (e) => {
       if (!e?.key) return;
@@ -64,8 +64,7 @@ export default function App() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // ===== 스와이프 / 마우스 제스처 =====
-  // ✅ (2) 모달이 열려 있으면 제스처 무시 → 모달 아래 페이지가 안 넘어가게
+  // ===== 제스처(모달 열려있으면 무시) =====
   const onTouchStart = (e) => {
     if (authOpen || myOpen) return;
     const t = e.touches?.[0];
@@ -103,24 +102,20 @@ export default function App() {
   };
 
   // ===== 페이지 이동 =====
-  // ✅ (3-1) prev 기준으로 dir 계산(역방향/멈춤 방지) + RESULT 진입 시 자동 요청
   const go = (next) => {
     setIndex((prev) => {
       if (next === prev || next < 0 || next > 6) return prev;
       setDir(next > prev ? "right" : "left");
-      if (next === 6 && prev !== 6) {
-        requestRecommendAndShow(); // 결과로 처음 진입할 때만 호출
-      }
+      // 결과로 '처음' 진입할 때 추천 호출
+      if (next === 6 && prev !== 6) requestRecommendAndShow();
       return next;
     });
   };
 
   // ===== 추천 실행 =====
-  // ✅ (3-2) location은 서버 요구대로 "문자열"로 전송 (주소 있으면 주소, 없으면 "lat,lng")
   async function requestRecommendAndShow() {
-    if (index !== 6) {
-      requestAnimationFrame(() => setIndex(6));
-    }
+    // 결과 화면으로 전환(이미 6이면 중복 set 방지)
+    if (index !== 6) requestAnimationFrame(() => setIndex(6));
     setLoading(true);
     setError("");
     setResult(null);
@@ -133,17 +128,17 @@ export default function App() {
       const lat = place?.lat ?? 37.5665;
       const lng = place?.lng ?? 126.9780;
       const addr = (place?.address || "").trim();
-      const locationStr = addr ? addr : `${lat},${lng}`;
+      const location = addr ? addr : `${lat},${lng}`; // 서버 요구: 문자열
 
       const payload = {
         date: useDate.toISOString().slice(0, 10),
         time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
-        location: locationStr,      // ← 문자열
-        etc: (etc || "").trim(),    // 서버가 note를 요구하면 키 이름만 note로 바꾸면 됨
+        location,
+        etc: (etc || "").trim(), // 필요시 note로 변경
       };
 
       const data = await postRecommend(payload);
-      setResult(data?.courses ? data : (data?.data ?? data?.result ?? data));
+      setResult(data); // 전체 객체 그대로 넘김(places/courses 등 내부에서 처리)
     } catch (e) {
       setError(e?.message || "추천 실패");
     } finally {
@@ -158,14 +153,11 @@ export default function App() {
         return (
           <PageSlide key="intro" dir={dir}>
             <Intro
-              onStartLeft={() => go(0)}
-              onStartRight={() => go(2)}
-              // Intro 내부에서 이 두 프롭으로 “로그인/마이페이지” 버튼 토글
-              showUserButton={!(authOpen || myOpen)}
-              isAuthed={authed}
-              onUserButtonClick={() =>
-                authed ? setMyOpen(true) : setAuthOpen(true)
-              }
+              onSwipeRight={() => go(2)} // 오른쪽 → Date
+              onSwipeLeft={() => go(0)}  // 왼쪽 → AI
+              showUserButton={!(authOpen || myOpen)}               // 모달 떠있으면 숨김
+              isAuthed={authed}                                    // 라벨 토글
+              onUserButtonClick={() => authed ? setMyOpen(true) : setAuthOpen(true)} // 클릭 → 모달 오픈
             />
           </PageSlide>
         );
@@ -251,16 +243,14 @@ export default function App() {
         {renderScreen()}
       </AnimatePresence>
 
-      {/* 로그인 모달: 처음엔 미로그인이면 열려 있음 */}
+      {/* 로그인 모달 */}
       <AuthModal
         open={authOpen}
         onSkip={() => {
-          // 그냥 둘러보기 → 버튼은 "로그인"
           setAuthOpen(false);
           setAuthed(false);
         }}
         onSuccess={() => {
-          // 로그인 성공 → 버튼은 "마이페이지"
           setAuthOpen(false);
           setAuthed(true);
         }}
@@ -279,7 +269,6 @@ export default function App() {
         open={myOpen}
         onClose={() => setMyOpen(false)}
         onLogout={() => {
-          // 로그아웃 → 로그인 모달 즉시 재오픈
           clearAuth();
           setMyOpen(false);
           setAuthed(false);
