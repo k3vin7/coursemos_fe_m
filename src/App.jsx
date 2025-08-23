@@ -25,12 +25,16 @@ export default function App() {
   const startYRef = useRef(0);
   const isMouseDownRef = useRef(false);
 
+  // ★ 전환 락 (왕복 스와이프 떨림 방지)
+  const SLIDE_MS = 200;
+  const animatingRef = useRef(false);
+
   // ===== 로그인 상태 & 모달 =====
   const [authed, setAuthed] = useState(isLoggedIn());
   const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인이면 처음부터 로그인 모달
   const [myOpen, setMyOpen] = useState(false);
 
-  // 첫 마운트 동기화(확실하게 모달/버튼 상태 맞춤)
+  // 첫 마운트 동기화(모달/버튼 상태 맞춤)
   useEffect(() => {
     const ok = isLoggedIn();
     setAuthed(ok);
@@ -72,8 +76,10 @@ export default function App() {
     startXRef.current = t.clientX;
     startYRef.current = t.clientY;
   };
+
   const onTouchEnd = (e) => {
     if (authOpen || myOpen) return;
+    if (animatingRef.current) return; // 전환 중엔 무시
     const t = e.changedTouches?.[0];
     if (!t) return;
     const dx = t.clientX - startXRef.current;
@@ -83,16 +89,19 @@ export default function App() {
       else go(index - 1);
     }
   };
+
   const onMouseDown = (e) => {
     if (authOpen || myOpen) return;
     isMouseDownRef.current = true;
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
   };
+
   const onMouseUp = (e) => {
     if (authOpen || myOpen) return;
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
+    if (animatingRef.current) return; // 전환 중엔 무시
     const dx = e.clientX - startXRef.current;
     const dy = e.clientY - startYRef.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
@@ -103,19 +112,28 @@ export default function App() {
 
   // ===== 페이지 이동 =====
   const go = (next) => {
+    if (animatingRef.current) return; // 전환 중엔 무시
+
     setIndex((prev) => {
       if (next === prev || next < 0 || next > 6) return prev;
+
+      // 방향 먼저 결정
       setDir(next > prev ? "right" : "left");
+
+      // ★ 락 온
+      animatingRef.current = true;
+      setTimeout(() => (animatingRef.current = false), SLIDE_MS + 60);
+
       // 결과로 '처음' 진입할 때 추천 호출
       if (next === 6 && prev !== 6) requestRecommendAndShow();
+
       return next;
     });
   };
 
   // ===== 추천 실행 =====
   async function requestRecommendAndShow() {
-    // 결과 화면으로 전환(이미 6이면 중복 set 방지)
-    if (index !== 6) requestAnimationFrame(() => setIndex(6));
+    // 여기서 setIndex(6) 하지 않음 (중복 전환/깜빡임 원인)
     setLoading(true);
     setError("");
     setResult(null);
@@ -134,11 +152,11 @@ export default function App() {
         date: useDate.toISOString().slice(0, 10),
         time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
         location,
-        etc: (etc || "").trim(), // 필요시 note로 변경
+        etc: (etc || "").trim(),
       };
 
       const data = await postRecommend(payload);
-      setResult(data); // 전체 객체 그대로 넘김(places/courses 등 내부에서 처리)
+      setResult(data);
     } catch (e) {
       setError(e?.message || "추천 실패");
     } finally {
@@ -151,19 +169,21 @@ export default function App() {
     switch (index) {
       case 1:
         return (
-          <PageSlide key="intro" dir={dir}>
+          <PageSlide key="intro" dir={dir} duration={SLIDE_MS / 1000}>
             <Intro
               onSwipeRight={() => go(2)} // 오른쪽 → Date
               onSwipeLeft={() => go(0)}  // 왼쪽 → AI
-              showUserButton={!(authOpen || myOpen)}               // 모달 떠있으면 숨김
-              isAuthed={authed}                                    // 라벨 토글
-              onUserButtonClick={() => authed ? setMyOpen(true) : setAuthOpen(true)} // 클릭 → 모달 오픈
+              showUserButton={!(authOpen || myOpen)} // 모달 떠있으면 숨김
+              isAuthed={authed}                      // 라벨 토글
+              onUserButtonClick={() =>
+                authed ? setMyOpen(true) : setAuthOpen(true)
+              }
             />
           </PageSlide>
         );
       case 0:
         return (
-          <PageSlide key="ai" dir={dir}>
+          <PageSlide key="ai" dir={dir} duration={SLIDE_MS / 1000}>
             <Recommendation_AI
               onNext={() => go(2)}
               onRequestRecommend={requestRecommendAndShow}
@@ -172,7 +192,7 @@ export default function App() {
         );
       case 2:
         return (
-          <PageSlide key="date" dir={dir}>
+          <PageSlide key="date" dir={dir} duration={SLIDE_MS / 1000}>
             <Optional_Date
               value={date}
               onChange={setDate}
@@ -183,7 +203,7 @@ export default function App() {
         );
       case 3:
         return (
-          <PageSlide key="time" dir={dir}>
+          <PageSlide key="time" dir={dir} duration={SLIDE_MS / 1000}>
             <Optional_Time
               value={time}
               onChange={setTime}
@@ -194,7 +214,7 @@ export default function App() {
         );
       case 4:
         return (
-          <PageSlide key="place" dir={dir}>
+          <PageSlide key="place" dir={dir} duration={SLIDE_MS / 1000}>
             <Optional_Place
               value={place}
               onChange={setPlace}
@@ -205,7 +225,7 @@ export default function App() {
         );
       case 5:
         return (
-          <PageSlide key="etc" dir={dir}>
+          <PageSlide key="etc" dir={dir} duration={SLIDE_MS / 1000}>
             <Optional_Etc
               value={etc}
               onChange={setEtc}
@@ -217,7 +237,7 @@ export default function App() {
         );
       case 6:
         return (
-          <PageSlide key="result" dir={dir}>
+          <PageSlide key="result" dir={dir} duration={SLIDE_MS / 1000}>
             <Optional_Result
               loading={loading}
               error={error}
@@ -233,13 +253,14 @@ export default function App() {
 
   return (
     <div
-      className="h-screen w-screen overflow-hidden bg-white"
+      className="relative h-screen w-screen overflow-hidden bg-white"  // ★ relative 추가
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
     >
-      <AnimatePresence mode="wait" initial={false}>
+      {/* custom={dir}로 현재 방향을 하위 모션에 전달 */}
+      <AnimatePresence mode="wait" initial={false} custom={dir}>
         {renderScreen()}
       </AnimatePresence>
 
