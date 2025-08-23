@@ -161,7 +161,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="px-3 h-9 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-60"
+              className="px-3 h-auto rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-60"
             >
               {uploading ? "업로드 중…" : <>사진<br />변경</>}
             </button>
@@ -184,7 +184,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         <div className="mt-6 flex items-center justify-between">
           <button
             onClick={handleLogout}
-            className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
+            className="px-3 w-full h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
           >
             로그아웃
           </button>
