@@ -30,6 +30,13 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인이면 처음부터 로그인 모달
   const [myOpen, setMyOpen] = useState(false);
 
+  // ★ 최소 수정 1: 마운트 직후 로그인 상태 재확인 → 모달 강제 오픈 보장
+  useEffect(() => {
+    const ok = isLoggedIn();
+    setAuthed(ok);
+    setAuthOpen(!ok);
+  }, []);
+
   // ===== 튜토리얼 =====
   const [showTutorial, setShowTutorial] = useState(true);
   const closeTutorial = () => setShowTutorial(false);
@@ -57,14 +64,18 @@ export default function App() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // 스와이프
+  // ===== 스와이프 / 마우스 제스처 =====
   const onTouchStart = (e) => {
+    // ★ 최소 수정 2: 모달이 열려 있으면 제스처 무시
+    if (authOpen || myOpen) return;
     const t = e.touches?.[0];
     if (!t) return;
     startXRef.current = t.clientX;
     startYRef.current = t.clientY;
   };
+
   const onTouchEnd = (e) => {
+    if (authOpen || myOpen) return; // ★
     const t = e.changedTouches?.[0];
     if (!t) return;
     const dx = t.clientX - startXRef.current;
@@ -74,12 +85,16 @@ export default function App() {
       else go(index - 1);
     }
   };
+
   const onMouseDown = (e) => {
+    if (authOpen || myOpen) return; // ★
     isMouseDownRef.current = true;
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
   };
+
   const onMouseUp = (e) => {
+    if (authOpen || myOpen) return; // ★
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
     const dx = e.clientX - startXRef.current;
@@ -90,24 +105,25 @@ export default function App() {
     }
   };
 
+  // ===== 페이지 이동 =====
+  // ★ 최소 수정 3: prev 기준으로 dir 계산 + 결과(6) 진입 시 자동 호출
   const go = (next) => {
     setIndex((prev) => {
       if (next === prev || next < 0 || next > 6) return prev;
-
-      // 방향은 "직전 prev" 기준으로 계산해야 뒤집히지 않음
       setDir(next > prev ? "right" : "left");
-
-      // 결과 페이지로 '처음' 진입할 때만 추천 API 호출
       if (next === 6 && prev !== 6) {
-        requestRecommendAndShow();
+        requestRecommendAndShow(); // 결과로 처음 진입할 때만 호출
       }
       return next;
     });
   };
 
-  // 추천 실행
+  // ===== 추천 실행 =====
   async function requestRecommendAndShow() {
-    requestAnimationFrame(() => setIndex(6));
+    // ★ 최소 수정 4: 이미 결과 화면이면 중복 setIndex(6) 방지
+    if (index !== 6) {
+      requestAnimationFrame(() => setIndex(6));
+    }
     setLoading(true);
     setError("");
     setResult(null);
@@ -133,7 +149,7 @@ export default function App() {
     }
   }
 
-  // 화면
+  // ===== 화면 =====
   const renderScreen = () => {
     switch (index) {
       case 1:
@@ -142,11 +158,8 @@ export default function App() {
             <Intro
               onStartLeft={() => go(0)}
               onStartRight={() => go(2)}
-              // ✅ 모달이 열려 있으면 버튼 자체를 렌더하지 않음
               showUserButton={!(authOpen || myOpen)}
-              // ✅ 라벨 토글
               isAuthed={authed}
-              // ✅ 클릭 시 동작 토글
               onUserButtonClick={() =>
                 authed ? setMyOpen(true) : setAuthOpen(true)
               }
