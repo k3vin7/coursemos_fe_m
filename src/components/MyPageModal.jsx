@@ -1,40 +1,61 @@
 // src/components/MyPageModal.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getUser as readLocalUser, getHomeInfo, saveUser, clearAuth } from "../api/auth";
+import {
+  getUser as readLocalUser,
+  getHomeInfo,
+  getHomePhoto,
+  uploadProfilePhoto,
+  saveUser,
+  clearAuth,
+} from "../api/auth";
 
 export default function MyPageModal({ open, onClose, onLogout }) {
   const [user, setUser] = useState(() => readLocalUser() || {});
   const [photoURL, setPhotoURL] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
-    // 초기 표시: 로컬(있으면)
     const local = readLocalUser() || {};
     setUser(local);
     setPhotoURL(local.photoURL || local.profilePhoto || "");
     setErr("");
     setLoading(true);
 
-    // DB에서 최신값 1회
+    // 1) /api/mypage 로 프로필(이름/생일/연애일수/사진 등) 가져오기
     getHomeInfo()
       .then((me) => {
         if (!me || typeof me !== "object") return;
         const merged = { ...local, ...me };
         setUser(merged);
-        setPhotoURL(me.photoURL || me.profilePhoto || merged.photoURL || "");
+        setPhotoURL(me.photoURL || merged.photoURL || "");
         saveUser(merged);
       })
-      .catch((e) => {
-        // 여기서 에러 메시지를 그대로 노출해 원인 파악
-        setErr(e?.message || "프로필을 불러올 수 없습니다.");
-      })
-      .finally(() => setLoading(false));
+      .catch((e) => setErr(e?.message || "프로필을 불러올 수 없습니다."))
+      .finally(async () => {
+        // 2) (보정) 사진이 없으면 /api/home에서 photoURL만 보충
+        try {
+          if (!photoURL) {
+            const h = await getHomePhoto(); // { photoURL }
+            if (h?.photoURL) {
+              setPhotoURL(h.photoURL);
+              setUser((prev) => {
+                const merged = { ...prev, photoURL: h.photoURL };
+                saveUser(merged);
+                return merged;
+              });
+            }
+          }
+        } catch {/* ignore */}
+        setLoading(false);
+      });
 
     return () => { window.__SWIPE_DISABLED = prev; };
   }, [open]);
@@ -43,6 +64,27 @@ export default function MyPageModal({ open, onClose, onLogout }) {
 
   const displayName = user?.name || user?.nickname || user?.username || "이름 미지정";
   const displayEmail = user?.email || "이메일 미지정";
+
+  async function onUploadChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setErr("");
+    try {
+      const { photoURL: url } = await uploadProfilePhoto(file); // POST /api/user/uploadPhoto
+      if (url) {
+        setPhotoURL(url);
+        const merged = { ...(readLocalUser() || {}), photoURL: url };
+        setUser(merged);
+        saveUser(merged);
+      }
+    } catch (e) {
+      setErr(e?.message || "사진 업로드 실패");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
 
   function handleLogout() {
     clearAuth();
@@ -63,20 +105,30 @@ export default function MyPageModal({ open, onClose, onLogout }) {
             : <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
                 {(displayName?.[0] || displayEmail?.[0] || "🙂")}
               </div>}
-          <div>
+          <div className="flex-1">
             <p className="text-base font-semibold">{displayName}</p>
             <p className="text-sm text-gray-500">{displayEmail}</p>
             {loading && <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>}
-            {err && !loading && (
-              <p className="text-xs text-rose-600 mt-1">{err}</p> // 예: [401] Unauthorized, [404] Not Found
-            )}
+            {err && !loading && <p className="text-xs text-rose-600 mt-1">{err}</p>}
+          </div>
+          <div className="shrink-0">
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUploadChange} />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="px-3 h-9 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-60"
+            >
+              {uploading ? "업로드 중…" : "사진 변경"}
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <InfoCard label="내 생일" value={user?.birthday} />
-          <InfoCard label="파트너 생일" value={user?.partnerBirthday} />
-          <InfoCard label="기념일(시작일)" value={user?.startDate} />
+          <Info label="내 생일" value={user?.birthday} />
+          <Info label="파트너 생일" value={user?.partnerBirthday} />
+          <Info label="기념일(시작일)" value={user?.startDate} />
+          <Info label="연애일수" value={user?.daysTogether != null ? String(user.daysTogether) : undefined} />
         </div>
 
         <div className="mt-6 flex items-center justify-between">
@@ -91,7 +143,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
   );
 }
 
-function InfoCard({ label, value }) {
+function Info({ label, value }) {
   return (
     <div className="rounded-2xl border border-gray-200 p-3">
       <p className="text-xs text-gray-500">{label}</p>
