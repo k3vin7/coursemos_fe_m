@@ -1,37 +1,40 @@
 // src/components/MyPageModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { getUser as readUserFromStorage, getHomeInfo, clearAuth } from "../api/auth";
+import { getUser as readLocalUser, getHomeInfo } from "../api/auth";
 
 export default function MyPageModal({ open, onClose, onLogout }) {
-  const [user, setUser] = useState(() => readUserFromStorage() || {});
+  const [user, setUser] = useState(() => readLocalUser() || {});
   const [photoURL, setPhotoURL] = useState("");
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    // 스와이프 잠금
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
-    // 1) 저장된 로컬 값으로 먼저 표시
-    setUser(readUserFromStorage() || {});
-    // 2) 서버에서 최신 프로필 동기화
+    // 먼저 로컬 값으로 즉시 표기
+    setUser(readLocalUser() || {});
+    setErr("");
     setLoading(true);
+
+    // 서버에서 가능한 엔드포인트 자동 탐색 후 최신 프로필 동기화
     getHomeInfo()
       .then((d) => {
-        if (!d) return;
-        // 서버 필드명을 추정해서 합침(있는 것만 덮어씀)
-        const merged = {
-          ...readUserFromStorage(),
-          ...d,
-        };
-        setUser(merged);
-        setPhotoURL(d.photoURL || d.profilePhoto || "");
-        // 로컬도 최신으로(다음에 마이페이지 열어도 보이게)
-        try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
+        if (d && typeof d === "object") {
+          setUser((prevUser) => {
+            const merged = { ...prevUser, ...d };
+            try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
+            return merged;
+          });
+          setPhotoURL(d.photoURL || d.profilePhoto || "");
+        }
       })
-      .catch(() => {})
+      .catch((e) => {
+        // 프로필 엔드포인트가 없거나 404여도 로컬만으로 표시 가능하니 경고만
+        setErr(e.message || "프로필을 불러올 수 없습니다.");
+      })
       .finally(() => setLoading(false));
 
     return () => { window.__SWIPE_DISABLED = prev; };
@@ -61,6 +64,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
             <p className="text-base font-semibold">{user?.name || user?.nickname || user?.username || "이름 미지정"}</p>
             <p className="text-sm text-gray-500">{user?.email || "이메일 미지정"}</p>
             {loading && <p className="text-xs text-gray-400 mt-1">프로필 동기화 중…</p>}
+            {err && !loading && <p className="text-xs text-rose-600 mt-1">{err}</p>}
           </div>
         </div>
 
