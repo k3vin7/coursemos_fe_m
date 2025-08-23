@@ -7,28 +7,32 @@ export default function MyPageModal({ open, onClose, onLogout }) {
   const [user, setUser] = useState(() => readLocalUser() || {});
   const [photoURL, setPhotoURL] = useState("");
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!open) return;
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
+    // 초기 표시: 로컬(있으면)
     const local = readLocalUser() || {};
     setUser(local);
     setPhotoURL(local.photoURL || local.profilePhoto || "");
-
+    setErr("");
     setLoading(true);
-    // 모달 열릴 때마다 DB에서 최신값 1회
+
+    // DB에서 최신값 1회
     getHomeInfo()
       .then((me) => {
         if (!me || typeof me !== "object") return;
         const merged = { ...local, ...me };
         setUser(merged);
         setPhotoURL(me.photoURL || me.profilePhoto || merged.photoURL || "");
-        saveUser(merged); // 앱 상태 최신화
+        saveUser(merged);
       })
-      .catch(() => {
-        // /api/mypage가 아직 없거나 권한문제면 로컬 값만 표시
+      .catch((e) => {
+        // 여기서 에러 메시지를 그대로 노출해 원인 파악
+        setErr(e?.message || "프로필을 불러올 수 없습니다.");
       })
       .finally(() => setLoading(false));
 
@@ -40,17 +44,9 @@ export default function MyPageModal({ open, onClose, onLogout }) {
   const displayName = user?.name || user?.nickname || user?.username || "이름 미지정";
   const displayEmail = user?.email || "이메일 미지정";
 
-  const avatar = photoURL
-    ? <img src={photoURL} alt="프로필" className="w-20 h-20 rounded-full object-cover border" />
-    : (
-      <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
-        {(displayName?.[0] || displayEmail?.[0] || "🙂")}
-      </div>
-    );
-
   function handleLogout() {
     clearAuth();
-    onLogout?.(); // 부모에서 로그인 모달 다시 띄우도록 연결되어 있을 것
+    onLogout?.();
   }
 
   return createPortal(
@@ -62,11 +58,18 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         </div>
 
         <div className="flex items-center gap-4 mb-5">
-          {avatar}
+          {photoURL
+            ? <img src={photoURL} alt="프로필" className="w-20 h-20 rounded-full object-cover border" />
+            : <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
+                {(displayName?.[0] || displayEmail?.[0] || "🙂")}
+              </div>}
           <div>
             <p className="text-base font-semibold">{displayName}</p>
             <p className="text-sm text-gray-500">{displayEmail}</p>
             {loading && <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>}
+            {err && !loading && (
+              <p className="text-xs text-rose-600 mt-1">{err}</p> // 예: [401] Unauthorized, [404] Not Found
+            )}
           </div>
         </div>
 
@@ -78,10 +81,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
 
         <div className="mt-6 flex items-center justify-between">
           <span className="text-sm text-gray-400">로그인된 상태</span>
-          <button
-            onClick={handleLogout}
-            className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
-          >
+          <button onClick={handleLogout} className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95">
             로그아웃
           </button>
         </div>
