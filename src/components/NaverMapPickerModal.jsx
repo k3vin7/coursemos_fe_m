@@ -1,4 +1,3 @@
-// src/components/NaverMapPickerModal.jsx
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadNaverMaps } from "./naverLoader.jsx";
@@ -13,21 +12,18 @@ export default function NaverMapPickerModal({
 }) {
   const [ready, setReady] = useState(false);
 
-  // 주소 표시용
-  const [addr, setAddr] = useState({ display: "", road: "", jibun: "" });
+  // ✅ 주소를 문자열로만 관리
+  const [addr, setAddr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // 지도/마커
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
 
-  // 검색
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState("");
 
-  // ===== 1) 모달 열릴 때 네이버맵 로드 & 지도 초기화 =====
   useEffect(() => {
     if (!open) return;
     let canceled = false;
@@ -39,13 +35,11 @@ export default function NaverMapPickerModal({
       const nv = window.naver?.maps;
       if (!nv || !mapDivRef.current) return;
 
-      // 초기 중심
       const center = new nv.LatLng(
         initialCenter?.lat ?? 37.5665,
         initialCenter?.lng ?? 126.9780
       );
 
-      // 지도 생성
       const map = new nv.Map(mapDivRef.current, {
         center,
         zoom: 15,
@@ -54,24 +48,15 @@ export default function NaverMapPickerModal({
       });
       mapRef.current = map;
 
-      // 마커 생성(중심에 고정)
-      markerRef.current = new nv.Marker({
-        position: center,
-        map,
-      });
+      markerRef.current = new nv.Marker({ position: center, map });
 
-      // 중심 이동이 끝나면 주소 갱신
       const onDragEnd = async () => {
         const c = map.getCenter();
         markerRef.current?.setPosition(c);
         setBusy(true);
         try {
           const display = await reverseGeocode(c);
-          setAddr({
-            display,
-            road: "",
-            jibun: "",
-          });
+          setAddr(display || "");
         } finally {
           setBusy(false);
         }
@@ -79,15 +64,13 @@ export default function NaverMapPickerModal({
 
       nv.Event.addListener(map, "dragend", onDragEnd);
       nv.Event.addListener(map, "zoom_changed", () => {
-        // 확대/축소 후에도 마커는 항상 중심으로
         markerRef.current?.setPosition(map.getCenter());
       });
 
-      // 최초 주소도 1회 역지오코딩
       setBusy(true);
       try {
         const display = await reverseGeocode(center);
-        setAddr({ display, road: "", jibun: "" });
+        setAddr(display || "");
       } finally {
         setBusy(false);
       }
@@ -103,7 +86,7 @@ export default function NaverMapPickerModal({
     };
   }, [open, initialCenter?.lat, initialCenter?.lng]);
 
-  // ===== 2) 검색(키워드 보정 포함) =====
+  // 🔎 주소/키워드 검색 (강남/교대 등 보정)
   const doSearch = () => {
     const qRaw = query.trim();
     const map = mapRef.current;
@@ -118,19 +101,12 @@ export default function NaverMapPickerModal({
           if (!item) return resolve(null);
           const lat = parseFloat(item.y);
           const lng = parseFloat(item.x);
-          if (Number.isFinite(lat) && Number.isFinite(lng)) {
-            resolve(new nv.LatLng(lat, lng));
-          } else {
-            resolve(null);
-          }
+          resolve(Number.isFinite(lat) && Number.isFinite(lng) ? new nv.LatLng(lat, lng) : null);
         });
       });
 
-    // 보정 후보: 그대로 → "역" → "구" → "동"
     const candidates = [qRaw];
-    if (!/[구동역]$/.test(qRaw)) {
-      candidates.push(`${qRaw}역`, `${qRaw}구`, `${qRaw}동`);
-    }
+    if (!/[구동역]$/.test(qRaw)) candidates.push(`${qRaw}역`, `${qRaw}구`, `${qRaw}동`);
 
     setSearching(true);
     setSearchErr("");
@@ -144,19 +120,17 @@ export default function NaverMapPickerModal({
       setSearching(false);
 
       if (!coord) {
-        setSearchErr("검색 결과가 없어요. 더 구체적으로 입력해 주세요. (예: 강남역, 교대, 서울시청)");
+        setSearchErr("검색 결과가 없어요. (예: 강남역, 교대, 서울시청)");
         return;
       }
 
-      // 지도/마커 이동
       map.setCenter(coord);
       markerRef.current?.setPosition(coord);
 
-      // 주소 갱신
       setBusy(true);
       try {
         const display = await reverseGeocode(coord);
-        setAddr({ display, road: "", jibun: "" });
+        setAddr(display || "");
       } finally {
         setBusy(false);
       }
@@ -175,7 +149,6 @@ export default function NaverMapPickerModal({
         className="w-[92vw] max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 헤더 */}
         <div className="px-4 py-3 border-b bg-white/95 backdrop-blur flex items-center justify-between">
           <h2 className="text-base font-semibold">{title}</h2>
           <button
@@ -187,7 +160,6 @@ export default function NaverMapPickerModal({
           </button>
         </div>
 
-        {/* 🔎 검색 바 */}
         <div className="mt-3 px-4 flex gap-2">
           <input
             type="text"
@@ -206,27 +178,19 @@ export default function NaverMapPickerModal({
           </button>
         </div>
 
-        {searchErr && (
-          <div className="px-4 mt-2 text-sm text-red-600">{searchErr}</div>
-        )}
+        {searchErr && <div className="px-4 mt-2 text-sm text-red-600">{searchErr}</div>}
 
-        {/* 지도 영역 */}
         <div className="px-4 py-3">
-          <div
-            ref={mapDivRef}
-            className="w-full h-[420px] rounded-xl overflow-hidden border border-gray-200"
-          />
+          <div ref={mapDivRef} className="w-full h-[420px] rounded-xl overflow-hidden border border-gray-200" />
         </div>
 
-        {/* 현재 주소 */}
         <div className="px-4 pb-3">
           <div className="text-xs text-gray-500">현재 중심 주소</div>
           <div className="text-sm text-gray-800 mt-1">
-            {busy ? "주소 확인 중..." : (addr.display || "주소를 불러오는 중...")}
+            {busy ? "주소 확인 중..." : (addr || "주소를 불러오는 중...")}
           </div>
         </div>
 
-        {/* 액션 버튼 */}
         <div className="px-4 pb-4 flex items-center justify-between gap-3">
           <button
             onClick={onClose}
@@ -242,7 +206,7 @@ export default function NaverMapPickerModal({
               onSelect?.({
                 lat: c.lat(),
                 lng: c.lng(),
-                address: addr.display,
+                address: String(addr || ""),   // ✅ 문자열만 전달
               });
               onClose?.();
             }}
