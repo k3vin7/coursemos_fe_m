@@ -10,7 +10,7 @@ export default function Intro({
   const startX = useRef(null);
   const locked = () => Boolean(window.__SWIPE_DISABLED);
 
-  const THRESHOLD = 40; // ← 이만큼 넘으면 색 진하게
+  const THRESHOLD = 80; // ← 이만큼 넘으면 색 진하게
 
   // 실시간 반지름(px)
   const [rRight, setRRight] = useState(0); // 오른쪽 스와이프(→) 하단 블루

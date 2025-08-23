@@ -83,7 +83,7 @@ export default function App() {
     if (!t) return;
     const dx = t.clientX - startXRef.current;
     const dy = t.clientY - startYRef.current;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 80) {
       if (dx < 0) go(index + 1, "left");   // ← 왼쪽 스와이프
       else        go(index - 1, "right");  // ← 오른쪽 스와이프
     }
