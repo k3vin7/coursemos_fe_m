@@ -1,104 +1,97 @@
+// src/components/ProgressDock.jsx
 import { createPortal } from "react-dom";
 
 export default function ProgressDock({
   current = 1,               // 1=date, 2=time, 3=place, 4=etc
-  total = 4,
-  labels = ["date", "time", "place", "etc"],
   className = "",
+  stroke = "#FF8DB5",        // 외곽선 색
+  strokeWidth = 5,
 }) {
-  // 색
-  const ACTIVE = "#FF6C43";                 // 진한 액센트
-  const INACTIVE = "rgba(255,108,67,0.18)"; // 연한 배경
-  const STROKE = "rgba(0,0,0,0.06)";
+  // 레이아웃 (반응형 스케일: viewBox 기준으로 그리고 width:100%)
+  // [왼쪽 선분] 20~100  | [하트] 90~210 | [오른쪽 선분] 210~280
+  const y = 64;
+  const left = { x1: 20, x2: 100, y };
+  const right = { x1: 210, x2: 280, y };
 
-  // 활성 세그먼트 판정
-  const isActive = (seg) => current === seg;
+  // 현재 단계까지 누적 표시
+  const showLeftLine  = current >= 1;
+  const showHeartL    = current >= 2;
+  const showHeartR    = current >= 3;
+  const showRightLine = current >= 4;
 
-  // SVG 레이아웃 (가로 300, 세로 120 기준으로 그린 다음, width:100%로 스케일)
-  // [0..90]  왼쪽 1/3 선분
-  // [90..210] 하트 (왼쪽/오른쪽 반쪽)
-  // [210..300] 오른쪽 1/3 선분
   return createPortal(
     <div
       className={`pointer-events-none fixed top-0 left-0 right-0 z-[50] ${className}`}
-      style={{ padding: "10px 16px" }}
+      style={{ padding: "12px 16px" }}
       aria-hidden
     >
       <div className="mx-auto max-w-[720px]">
         <svg
-          viewBox="0 0 300 120"
+          viewBox="0 0 300 128"
           width="100%"
-          height="64"
+          height="72"
           preserveAspectRatio="none"
         >
-          {/* 배경 선분 (연하게) */}
-          <rect x="0"   y="55" width="90"  height="10" rx="5" fill={INACTIVE} />
-          <rect x="210" y="55" width="90"  height="10" rx="5" fill={INACTIVE} />
-
-          {/* 하트 배경 (연하게) */}
           <defs>
-            {/* 전체 하트 패스 하나 정의 */}
+            {/* 부드러운 하트 패스 (센터 x=150) */}
             <path id="heartPath"
               d="
-                M150,70
-                C150,50 135,35 118,35
-                C100,35 90,47 90,60
-                C90,78 112,90 150,108
-                C188,90 210,78 210,60
-                C210,47 200,35 182,35
-                C165,35 150,50 150,70 Z
+                M150,76
+                C150,52 136,38 119,38
+                C101,38 92,50 92,63
+                C92,82 114,94 150,112
+                C186,94 208,82 208,63
+                C208,50 199,38 181,38
+                C164,38 150,52 150,76 Z
               " />
-            {/* 좌/우 반쪽 클립 */}
-            <clipPath id="clipLeftHalf">
-              <rect x="90" y="0" width="60" height="120" />
-            </clipPath>
-            <clipPath id="clipRightHalf">
-              <rect x="150" y="0" width="60" height="120" />
-            </clipPath>
+            {/* 하트 반쪽 클립 */}
+            <clipPath id="clipLeft"><rect x="90"  y="0" width="60" height="128"/></clipPath>
+            <clipPath id="clipRight"><rect x="150" y="0" width="60" height="128"/></clipPath>
           </defs>
 
-          {/* 하트(연한 배경) */}
-          <use href="#heartPath" fill={INACTIVE} />
+          {/* 1단계: 왼쪽 선분 */}
+          {showLeftLine && (
+            <line
+              x1={left.x1} y1={left.y}
+              x2={left.x2} y2={left.y}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          )}
 
-          {/* 활성 영역들 */}
-          {/* 1단계: 왼쪽 1/3 선분 활성 */}
-          <rect
-            x="0" y="55" width="90" height="10" rx="5"
-            fill={isActive(1) ? ACTIVE : "transparent"}
-          />
+          {/* 2단계: 하트 왼쪽 반쪽 */}
+          {showHeartL && (
+            <use
+              href="#heartPath"
+              clipPath="url(#clipLeft)"
+              fill="none"
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+            />
+          )}
 
-          {/* 2단계: 하트 왼쪽 반쪽 활성 */}
-          <use
-            href="#heartPath"
-            clipPath="url(#clipLeftHalf)"
-            fill={isActive(2) ? ACTIVE : "transparent"}
-          />
+          {/* 3단계: 하트 오른쪽 반쪽 */}
+          {showHeartR && (
+            <use
+              href="#heartPath"
+              clipPath="url(#clipRight)"
+              fill="none"
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+            />
+          )}
 
-          {/* 3단계: 하트 오른쪽 반쪽 활성 */}
-          <use
-            href="#heartPath"
-            clipPath="url(#clipRightHalf)"
-            fill={isActive(3) ? ACTIVE : "transparent"}
-          />
-
-          {/* 4단계: 오른쪽 1/3 선분 활성 */}
-          <rect
-            x="210" y="55" width="90" height="10" rx="5"
-            fill={isActive(4) ? ACTIVE : "transparent"}
-          />
-
-          {/* 외곽선(아주 옅게) */}
-          <rect x="0"   y="55" width="90"  height="10" rx="5" fill="none" stroke={STROKE} />
-          <use  href="#heartPath" fill="none" stroke={STROKE} />
-          <rect x="210" y="55" width="90"  height="10" rx="5" fill="none" stroke={STROKE} />
-
-          {/* 라벨(선택) */}
-          <g fontSize="10" fill="#666" textAnchor="middle">
-            <text x="45"  y="48">{labels[0] ?? "date"}</text>
-            <text x="120" y="28">{labels[1] ?? "time"}</text>
-            <text x="180" y="28">{labels[2] ?? "place"}</text>
-            <text x="255" y="48">{labels[3] ?? "etc"}</text>
-          </g>
+          {/* 4단계: 오른쪽 선분 */}
+          {showRightLine && (
+            <line
+              x1={right.x1} y1={right.y}
+              x2={right.x2} y2={right.y}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          )}
         </svg>
       </div>
     </div>,
