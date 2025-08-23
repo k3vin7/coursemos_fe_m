@@ -15,171 +15,163 @@ import AuthModal from "./components/AuthModal.jsx";
 import MyPageModal from "./components/MyPageModal.jsx";
 
 import { postRecommend } from "./api/recommend.js";
-import { getToken, clearAuth } from "./api/auth";
+import { isLoggedIn, clearAuth } from "./api/auth.js"; // ← 기존 auth 유틸 그대로 사용
 
 export default function App() {
-  // 0=AI, 1=Intro, 2=Date, 3=Time, 4=Place, 5=Etc, 6=Result
-  const [index, setIndex] = useState(1);
+  // 페이지/슬라이드
+  const [index, setIndex] = useState(1); // 1 = Intro
   const [dir, setDir] = useState("right");
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const isMouseDownRef = useRef(false);
 
-  // 로그인 모달
-  const [authOpen, setAuthOpen] = useState(() => !getToken());
-  // 마이페이지 모달
+  // 로그인 상태 & 모달
+  const [authed, setAuthed] = useState(isLoggedIn());
+  const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인 시작 → 모달 자동 오픈
   const [myOpen, setMyOpen] = useState(false);
 
-  // 스와이프
-  const startPos = useRef(null);
-  const isDragging = useRef(false);
-  const [swipeLocked, setSwipeLocked] = useState(false);
-  const swipeDisabled = () =>
-    authOpen || myOpen || swipeLocked || Boolean(window.__SWIPE_DISABLED);
+  // 튜토리얼
+  const [showTutorial, setShowTutorial] = useState(true);
+  const closeTutorial = () => setShowTutorial(false);
 
-  // 튜토리얼은 로그인 이후 1회
-  const [showTutorial, setShowTutorial] = useState(
-    () => !localStorage.getItem("TUTORIAL_SEEN_V2")
-  );
-  const closeTutorial = () => {
-    localStorage.setItem("TUTORIAL_SEEN_V2", "1");
-    setShowTutorial(false);
-  };
-
-  // 입력
-  const [date, setDate]   = useState(null);
-  const [time, setTime]   = useState({ hour: null, minute: 0 });
+  // 추천 입력/응답
+  const [date, setDate] = useState(null);
+  const [time, setTime] = useState({ hour: null, minute: null });
   const [place, setPlace] = useState({ lat: null, lng: null, address: "" });
-  const [etc, setEtc]     = useState("");
-
-  // 결과
+  const [etc, setEtc] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState(null);
-  const [error,   setError]   = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
 
-  // 페이지 이동
-  const go = (next) => {
-    if (next === index || next < 0 || next > 6) return;
-    if (index === 1 && next === 0) setDir("left");
-    else if (index === 1 && next >= 2) setDir("right");
-    else setDir(next < index ? "left" : "right");
-
-    if (index === 5 && next === 6) { requestRecommendAndShow(); return; }
-    requestAnimationFrame(() => setIndex(next));
-  };
-
-  // 스와이프 핸들러
-  const threshold = 150;
-  const resetDrag = () => { isDragging.current = false; startPos.current = null; };
-
-  const onTouchStart = (e) => { if (swipeDisabled()) return resetDrag(); isDragging.current = true; startPos.current = e.touches[0].clientX; };
-  const onTouchEnd   = (e) => { if (swipeDisabled()) return resetDrag();
-    if (!isDragging.current || startPos.current == null) return;
-    const dx = e.changedTouches[0].clientX - startPos.current;
-    if (dx > threshold) go(index - 1);
-    else if (dx < -threshold) go(index + 1);
-    resetDrag();
-  };
-
-  const onMouseDown = (e) => { if (swipeDisabled()) return resetDrag(); isDragging.current = true; startPos.current = e.clientX; };
-  const onMouseUp   = (e) => { if (swipeDisabled()) return resetDrag();
-    if (!isDragging.current || startPos.current == null) return;
-    const dx = e.clientX - startPos.current;
-    if (dx > threshold) go(index - 1);
-    else if (dx < -threshold) go(index + 1);
-    resetDrag();
-  };
-
+  // 다른 탭에서 토큰 바뀌면 반영 + 토큰 사라지면 로그인 모달 띄우기
   useEffect(() => {
-    const preventSelect = (e) => { if (isDragging.current) e.preventDefault(); };
-    window.addEventListener("selectstart", preventSelect);
-    return () => window.removeEventListener("selectstart", preventSelect);
+    const onStorage = (e) => {
+      if (!e?.key) return;
+      if (e.key === "AUTH_TOKEN" || e.key === "AUTH_TOKEN_EXPIRES_AT") {
+        const ok = isLoggedIn();
+        setAuthed(ok);
+        if (!ok) setAuthOpen(true);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // 추천 요청
+  // 스와이프
+  const onTouchStart = (e) => {
+    const t = e.touches?.[0]; if (!t) return;
+    startXRef.current = t.clientX; startYRef.current = t.clientY;
+  };
+  const onTouchEnd = (e) => {
+    const t = e.changedTouches?.[0]; if (!t) return;
+    const dx = t.clientX - startXRef.current;
+    const dy = t.clientY - startYRef.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx < 0) go(index + 1); else go(index - 1);
+    }
+  };
+  const onMouseDown = (e) => {
+    isMouseDownRef.current = true;
+    startXRef.current = e.clientX; startYRef.current = e.clientY;
+  };
+  const onMouseUp = (e) => {
+    if (!isMouseDownRef.current) return;
+    isMouseDownRef.current = false;
+    const dx = e.clientX - startXRef.current;
+    const dy = e.clientY - startYRef.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+      if (dx < 0) go(index + 1); else go(index - 1);
+    }
+  };
+
+  const go = (next) => {
+    if (next === index || next < 0 || next > 6) return;
+    if (index === 1 && next === 0) setDir("left");       // Intro → AI
+    else if (index === 1 && next === 2) setDir("right"); // Intro → Date
+    else if (next > index) setDir("right");
+    else setDir("left");
+    setIndex(next);
+  };
+
+  // 추천 실행
   async function requestRecommendAndShow() {
     requestAnimationFrame(() => setIndex(6));
-    setLoading(true);
-    setError("");
-    setResult(null);
-
-    const now = new Date();
-    const useDate = date ?? now;
-    const useHour = time?.hour ?? now.getHours();
-    const useMinute = time?.minute ?? (now.getMinutes() < 30 ? 0 : 30);
-
-    let loc =
-      (place?.address && place.address.trim()) ||
-      (place?.lat != null && place?.lng != null ? `${place.lat},${place.lng}` : "");
-    if (!loc) loc = "37.5665,126.9780";
-
-    const payload = {
-      date: useDate.toISOString().slice(0, 10),
-      time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
-      location: loc,
-    };
-
+    setLoading(true); setError(""); setResult(null);
     try {
+      const now = new Date();
+      const useDate = date ?? now;
+      const useHour = time?.hour ?? now.getHours();
+      const useMinute = time?.minute ?? 0;
+      const payload = {
+        date: useDate.toISOString().slice(0, 10),
+        time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
+        lat: place?.lat ?? 37.5665,
+        lng: place?.lng ?? 126.9780,
+        address: place?.address || "서울특별시 중구 세종대로 110",
+        etc: etc || "",
+      };
       const data = await postRecommend(payload);
-      setResult({ ...data });
+      setResult(data);
     } catch (e) {
-      setError(e.message || "추천 요청 실패");
+      setError(e?.message || "추천 실패");
     } finally {
       setLoading(false);
     }
   }
 
+  // 화면
   const renderScreen = () => {
     switch (index) {
-      case 0:
-        return (
-          <PageSlide key="ai" dir={dir}>
-            <Recommendation_AI onBack={() => go(1)} />
-          </PageSlide>
-        );
       case 1:
         return (
           <PageSlide key="intro" dir={dir}>
             <Intro
-              onSwipeRight={() => go(0)}
-              onSwipeLeft={() => go(2)}
-              onMyPage={() => setMyOpen(true)}
+              onStartLeft={() => go(0)}
+              onStartRight={() => go(2)}
+              showUserButton={!(authOpen || myOpen)}                       // 모달 열려있으면 버튼 숨김
+              isAuthed={authed}                                             // 로그인/비로그인 라벨 토글
+              onUserButtonClick={() => (authed ? setMyOpen(true) : setAuthOpen(true))}
             />
+          </PageSlide>
+        );
+      case 0:
+        return (
+          <PageSlide key="ai" dir={dir}>
+            <Recommendation_AI onNext={() => go(2)} onRequestRecommend={requestRecommendAndShow} />
           </PageSlide>
         );
       case 2:
         return (
-          <PageSlide key="opt-date" dir={dir}>
-            <Optional_Date value={date} onChange={setDate} onPrev={() => go(1)} onNext={() => go(3)} />
+          <PageSlide key="date" dir={dir}>
+            <Optional_Date value={date} onChange={setDate} onNext={() => go(3)} onPrev={() => go(1)} />
           </PageSlide>
         );
       case 3:
         return (
-          <PageSlide key="opt-time" dir={dir}>
-            <Optional_Time value={time} onChange={setTime} onPrev={() => go(2)} onNext={() => go(4)} />
+          <PageSlide key="time" dir={dir}>
+            <Optional_Time value={time} onChange={setTime} onNext={() => go(4)} onPrev={() => go(2)} />
           </PageSlide>
         );
       case 4:
         return (
-          <PageSlide key="opt-place" dir={dir}>
-            <Optional_Place
-              value={place}
-              onChange={setPlace}
-              onPrev={() => go(3)}
-              onNext={() => go(5)}
-              onSwipeLockChange={(v) => setSwipeLocked(!!v)}
-            />
+          <PageSlide key="place" dir={dir}>
+            <Optional_Place value={place} onChange={setPlace} onNext={() => go(5)} onPrev={() => go(3)} />
           </PageSlide>
         );
       case 5:
         return (
-          <PageSlide key="opt-etc" dir={dir}>
-            <Optional_Etc value={etc} onChange={setEtc} onPrev={() => go(4)} onNext={() => go(6)} />
+          <PageSlide key="etc" dir={dir}>
+            <Optional_Etc value={etc} onChange={setEtc} onNext={() => go(6)} onPrev={() => go(4)} onSubmit={requestRecommendAndShow} />
+          </PageSlide>
+        );
+      case 6:
+        return (
+          <PageSlide key="result" dir={dir}>
+            <Optional_Result loading={loading} error={error} result={result} onPrev={() => go(5)} />
           </PageSlide>
         );
       default:
-        return (
-          <PageSlide key="opt-result" dir={dir}>
-            <Optional_Result loading={loading} error={error} result={result} onPrev={() => go(5)} onDone={() => go(1)} />
-          </PageSlide>
-        );
+        return null;
     }
   };
 
@@ -193,16 +185,22 @@ export default function App() {
     >
       <AnimatePresence mode="wait" initial={false}>
         {renderScreen()}
-    </AnimatePresence>
+      </AnimatePresence>
 
-      {/* 로그인 모달: 열려 있으면 튜토리얼 숨김 */}
+      {/* 로그인 모달: 처음엔 미로그인이면 열려 있음 */}
       <AuthModal
         open={authOpen}
-        onSkip={() => setAuthOpen(false)}
-        onSuccess={() => setAuthOpen(false)}
+        onSkip={() => {          // 그냥 둘러보기 → 모달 닫고 버튼은 "로그인"
+          setAuthOpen(false);
+          setAuthed(false);
+        }}
+        onSuccess={() => {       // 로그인 성공 → 모달 닫고 버튼은 "마이페이지"
+          setAuthOpen(false);
+          setAuthed(true);
+        }}
       />
 
-      {/* 인트로에서만, 로그인 모달이 닫힌 상태일 때만 1회 표시 */}
+      {/* 튜토리얼: 모달들 닫혀 있을 때만 1회 표시 */}
       {index === 1 && (
         <TutorialOverlay open={!authOpen && !myOpen && showTutorial} onClose={closeTutorial} />
       )}
@@ -211,10 +209,11 @@ export default function App() {
       <MyPageModal
         open={myOpen}
         onClose={() => setMyOpen(false)}
-        onLogout={() => {
+        onLogout={() => {        // 로그아웃 → 로그인 모달 즉시 재오픈
           clearAuth();
           setMyOpen(false);
-          setAuthOpen(true);   // → 로그아웃 즉시 로그인 모달 재오픈
+          setAuthed(false);
+          setAuthOpen(true);
         }}
       />
     </div>

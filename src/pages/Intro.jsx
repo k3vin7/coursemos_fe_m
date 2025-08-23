@@ -1,67 +1,43 @@
-// src/pages/Intro.jsx
-import { useRef } from "react";
-
-export default function Intro({ onSwipeRight, onSwipeLeft, onMyPage }) {
-  const startX = useRef(null);
-  const locked = () => Boolean(window.__SWIPE_DISABLED);
-
-  const handleTouchStart = (e) => {
-    if (locked()) { startX.current = null; return; }
-    startX.current = e.touches[0].clientX;
-  };
-  const handleTouchEnd = (e) => {
-    if (locked()) { startX.current = null; return; }
-    if (startX.current === null) return;
-    const dx = e.changedTouches[0].clientX - startX.current;
-    const threshold = 50;
-    if (dx > threshold) onSwipeRight?.();
-    if (dx < -threshold) onSwipeLeft?.();
-    startX.current = null;
-  };
-
+export default function Intro({
+  onStartLeft,
+  onStartRight,
+  showUserButton = false,
+  isAuthed = false,
+  onUserButtonClick,
+}) {
   return (
-    <div
-      className="h-screen overflow-hidden relative"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      {/* ✅ 최상단 고정: 오버레이/이미지 위에서도 클릭됨 */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onMyPage?.(); }}
-        className="fixed top-4 right-4 z-[12000] pointer-events-auto
-                   h-10 px-4 rounded-full bg-white/90 backdrop-blur
-                   border border-gray-200 shadow hover:bg-white"
-        aria-label="마이페이지"
-      >
-        마이페이지
-      </button>
+    <div className="relative w-full h-full flex flex-col items-center justify-center px-4">
+      {/* 사용자 버튼 (조건부 렌더) */}
+      {showUserButton && (
+        <button
+          type="button"
+          onClick={onUserButtonClick}
+          className="absolute top-4 right-4 rounded-full border px-4 h-9 bg-white shadow-sm hover:bg-gray-50"
+        >
+          {isAuthed ? "마이페이지" : "로그인"}
+        </button>
+      )}
 
-      {/* 오른쪽 스와이프 힌트 (장식 요소는 클릭 막지 않도록) */}
-      <p className="absolute top-[12vh] right-0 px-2 pointer-events-none">추천 데이트 코스는 여기!!</p>
-      <div className="absolute flex flex-col items-end top-[15vh] right-0 pointer-events-none">
-        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-l-3xl bg-[#FABAE170] shadow-xl">
-          <div className="flex items-center justify-center">
-            <p className="mr-3 font-semibold text-gray-500">오른쪽으로 스와이프!</p>
-            <img src="/RightArrow.png" alt="" className="pointer-events-none" />
-          </div>
-        </div>
-      </div>
+      {/* 기존 인트로 콘텐츠 (필요시 네 문구/버튼 그대로 유지) */}
+      <h2 className="text-center text-lg font-semibold mb-6">
+        추천 데이트 코스는 여기!!
+      </h2>
 
-      {/* 워터마크(전체를 덮지만 클릭은 통과) */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <img src="/watermark.png" alt="워터마크" className="max-w-[80vw] max-h-[60vh]" />
-      </div>
-
-      {/* 왼쪽 스와이프 힌트 */}
-      <div className="absolute flex flex-col items-start bottom-[15vh] left-0 pointer-events-none">
-        <p className="px-2">간단한 정보 입력으로 맞춤 코스 추천!</p>
-        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-r-3xl bg-[#ADC3FF70] shadow-xl">
-          <div className="flex items-center justify-center">
-            <img src="/LeftArrow.png" alt="" className="pointer-events-none" />
-            <p className="ml-3 font-semibold text-gray-500">왼쪽으로 스와이프!</p>
-          </div>
-        </div>
+      <div className="grid gap-3">
+        <button
+          type="button"
+          onClick={onStartRight}
+          className="mx-auto rounded-full bg-pink-100 px-5 py-2 text-sm shadow"
+        >
+          오른쪽으로 스와이프! →
+        </button>
+        <button
+          type="button"
+          onClick={onStartLeft}
+          className="mx-auto rounded-full bg-gray-100 px-5 py-2 text-sm shadow"
+        >
+          ← 왼쪽으로 스와이프!
+        </button>
       </div>
     </div>
   );
