@@ -121,9 +121,9 @@ export default function MyPageModal({ open, onClose, onLogout }) {
           <h3 className="text-xl font-bold">마이페이지</h3>
           <button
             onClick={onClose}
-            className="px-3 h-9 rounded-lg border text-gray-600 hover:bg-gray-50"
+            className="px-3 h-9 text-gray-600"
           >
-            닫기
+            x
           </button>
         </div>
 
@@ -172,7 +172,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
           {/* ⬇️ 날짜 세 곳은 시간 제거해서 표시 */}
           <Info label="내 생일" value={dateOnly(user?.birthday)} />
           <Info label="애인 생일" value={dateOnly(user?.partnerBirthday)} />
-          <Info label="기념일(시작일)" value={dateOnly(user?.startDate)} />
+          <Info label="1일" value={dateOnly(user?.startDate)} />
           <Info
             label="연애일수"
             value={
@@ -184,7 +184,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         <div className="mt-6 flex items-center justify-between">
           <button
             onClick={handleLogout}
-            className="px-3 w-full h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
+            className="px-3 w-full h-10 rounded-xl bg-red-600 text-white hover:opacity-90 active:scale-95"
           >
             로그아웃
           </button>
