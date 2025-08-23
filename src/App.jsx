@@ -13,9 +13,40 @@ import PageSlide from "./components/PageSlide.jsx";
 import TutorialOverlay from "./components/TutorialOverlay.jsx";
 import AuthModal from "./components/AuthModal.jsx";
 import MyPageModal from "./components/MyPageModal.jsx";
+import LoadingOverlay from "./components/LoadingOverlay.jsx";
 
 import { postRecommend } from "./api/recommend.js";
 import { isLoggedIn, clearAuth } from "./api/auth.js";
+
+function weatherToPhrase(text) {
+  const t = String(text || "").toLowerCase();
+  if (/비|rain|shower|drizzle/.test(t)) return "오늘은 비가 오네요 ☔ 실내 데이트 위주로 찾아볼게요!";
+  if (/눈|snow/.test(t)) return "오늘은 눈이 와요 ❄️ 따뜻한 실내 위주로 추천할게요!";
+  if (/맑|clear|sun/.test(t)) return "오늘은 날씨가 맑네요! ☀️";
+  if (/흐|구름|cloud/.test(t)) return "오늘은 구름이 많아요 ☁️ 산책하기 좋은 코스를 골라볼게요.";
+  if (/폭염|더|hot|heat/.test(t)) return "오늘은 많이 덥네요 🥵 실내/그늘 위주로 골라볼게요.";
+  if (/추|cold|freez|한파/.test(t)) return "오늘은 많이 춥네요 🥶 실내 위주로 추천해볼게요.";
+  if (/바람|강풍|wind/.test(t)) return "오늘은 바람이 강해요 🌬️ 바람 덜 부는 동선으로 찾아볼게요.";
+  return "오늘의 날씨를 반영해서 코스를 고르는 중…";
+}
+
+// 로딩 힌트 배열 생성
+function composeLoadingHints({ weatherText, date, place }) {
+  const first = weatherToPhrase(weatherText);
+  const addrHint = place?.address
+    ? `${place.address} 근처를 탐색하는 중…`
+    : "주변 스팟을 분석하는 중…";
+  const dateHint = date
+    ? `${new Date(date).toLocaleDateString("ko-KR")} 일정에 맞춰 조정 중…`
+    : "시간대에 맞춰 코스를 조정하는 중…";
+  return [
+    first,
+    addrHint,
+    dateHint,
+    "이동 시간을 줄이는 동선을 계산하는 중…",
+    "사진 맛집 우선순위를 정렬하는 중…",
+  ];
+}
 
 export default function App() {
   // ===== 페이지/슬라이드 =====
@@ -33,6 +64,10 @@ export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [authOpen, setAuthOpen] = useState(!isLoggedIn());
   const [myOpen, setMyOpen] = useState(false);
+
+  const [weatherText, setWeatherText] = useState(
+    () => localStorage.getItem("LAST_WEATHER_TEXT") || ""
+  );
 
   useEffect(() => {
     const ok = isLoggedIn();
@@ -157,6 +192,10 @@ export default function App() {
 
       const data = await postRecommend(payload);
       setResult(data);
+      if (data?.weather_text) {
+        setWeatherText(data.weather_text);
+        try { localStorage.setItem("LAST_WEATHER_TEXT", data.weather_text); } catch {}
+      }
     } catch (e) {
       setError(e?.message || "추천 실패");
     } finally {
@@ -263,6 +302,11 @@ export default function App() {
       <AnimatePresence mode="wait" initial={false} custom={dir}>
         {renderScreen()}
       </AnimatePresence>
+
+      <LoadingOverlay
+        open={index === 6 && loading}
+        hints={composeLoadingHints({ weatherText, date, place })}
+      />
 
       {/* 로그인 모달 */}
       <AuthModal
