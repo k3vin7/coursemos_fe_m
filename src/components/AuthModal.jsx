@@ -7,7 +7,7 @@ import {
   saveAuth,
   saveUser,
   getUser,
-  getHomeInfo, // ✅ 로그인/가입 후 서버 프로필 동기화
+  getHomeInfo, // 로그인/가입 직후 DB에서 프로필 1회 가져옴
 } from "../api/auth";
 
 export default function AuthModal({ open, onSuccess, onSkip }) {
@@ -15,9 +15,7 @@ export default function AuthModal({ open, onSuccess, onSkip }) {
     if (!open) return;
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
-    return () => {
-      window.__SWIPE_DISABLED = prev;
-    };
+    return () => { window.__SWIPE_DISABLED = prev; };
   }, [open]);
 
   if (!open) return null;
@@ -58,19 +56,17 @@ function Body({ onSuccess }) {
   const [err, setErr] = useState("");
 
   const canSubmit = mode === "login" ? email && pw : name && email && pw;
-
-  const normalizeEmail = (v) => String(v || "").trim().toLowerCase();
+  const normEmail = (v) => String(v || "").trim().toLowerCase();
 
   async function syncProfileFromServer() {
     try {
-      const me = await getHomeInfo(); // ✅ 백엔드 프로필 조회
+      const me = await getHomeInfo(); // /api/mypage
       if (me && typeof me === "object") {
-        // 기존 로컬 값과 병합 저장
         const prev = getUser() || {};
-        saveUser({ ...prev, ...me });
+        saveUser({ ...prev, ...me }); // DB값 병합 저장
       }
     } catch {
-      // 프로필 API가 아직 없거나 실패해도 앱 동작에는 영향 없음
+      // /api/mypage 가 없거나 권한 문제면 무시(화면은 로그인 상태만 유지)
     }
   }
 
@@ -80,13 +76,12 @@ function Body({ onSuccess }) {
     setBusy(true);
     setErr("");
 
-    const em = normalizeEmail(email);
+    const em = normEmail(email);
     const pwc = String(pw || "").trim();
     const nm = String(name || "").trim();
 
     try {
       if (mode === "login") {
-        // 로그인
         const data = await login({ email: em, password: pwc });
         saveAuth({
           token: data?.token,
@@ -95,20 +90,15 @@ function Body({ onSuccess }) {
           user: data?.user || null,
         });
 
-        // 응답에 user가 있으면 저장, 없으면 최소 이메일만 보장
-        if (data?.user) {
-          saveUser({ ...(getUser() || {}), ...data.user });
-        } else {
+        // 로그인 응답에 user가 없을 수 있으니 최소 이메일은 보장
+        if (!data?.user && em) {
           const prev = getUser() || {};
-          if (em) saveUser({ ...prev, email: em });
+          saveUser({ ...prev, email: em });
         }
 
-        // ✅ 서버 프로필 한 번 동기화
-        await syncProfileFromServer();
-
+        await syncProfileFromServer(); // DB에서 최신 프로필 반영
         onSuccess?.({ token: data?.token, user: data?.user });
       } else {
-        // 회원가입
         const payload = {
           email: em,
           password: pwc,
@@ -119,25 +109,15 @@ function Body({ onSuccess }) {
         };
         const data = await signup(payload);
 
-        // 가입 응답에 token이 오면 저장
+        // 가입 응답에 token이 있으면 저장
         if (data?.token) {
           saveAuth({ token: data.token, user: data?.user || null });
         }
 
-        // 폼 값은 로컬에도 선반영(마이페이지 즉시 표기)
-        const baseLocal = {
-          email: em,
-          name: nm,
-          birthday,
-          partnerBirthday,
-          startDate,
-        };
-        saveUser({ ...(getUser() || {}), ...baseLocal });
-
-        // ✅ 서버 프로필 동기화(토큰 존재 시)
+        // DB에서 한 번 가져와 반영
         await syncProfileFromServer();
 
-        // 가입 응답에 토큰이 없었다면 동일 자격증명으로 자동 로그인
+        // 가입 응답에 token이 없으면 같은 자격증명으로 자동 로그인 후 다시 동기화
         if (!data?.token) {
           const after = await login({ email: em, password: pwc });
           saveAuth({
@@ -146,9 +126,6 @@ function Body({ onSuccess }) {
             expiresIn: Number(after?.expiresIn),
             user: after?.user || null,
           });
-          if (after?.user) {
-            saveUser({ ...(getUser() || {}), ...after.user });
-          }
           await syncProfileFromServer();
         }
 
@@ -246,10 +223,7 @@ function Body({ onSuccess }) {
         {mode === "login" ? "아직 계정이 없나요? " : "이미 계정이 있나요? "}
         <button
           type="button"
-          onClick={() => {
-            setErr("");
-            setMode(mode === "login" ? "signup" : "login");
-          }}
+          onClick={() => { setErr(""); setMode(mode === "login" ? "signup" : "login"); }}
           className="underline underline-offset-2 text-indigo-600"
         >
           {mode === "login" ? "회원가입" : "로그인"}
@@ -265,18 +239,14 @@ function Tabs({ value, onChange }) {
       <button
         type="button"
         onClick={() => onChange("login")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${
-          value === "login" ? "bg-white shadow border" : "text-gray-600"
-        }`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${value === "login" ? "bg-white shadow border" : "text-gray-600"}`}
       >
         로그인
       </button>
       <button
         type="button"
         onClick={() => onChange("signup")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${
-          value === "signup" ? "bg-white shadow border" : "text-gray-600"
-        }`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${value === "signup" ? "bg-white shadow border" : "text-gray-600"}`}
       >
         회원가입
       </button>

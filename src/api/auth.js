@@ -1,28 +1,26 @@
 // src/api/auth.js
+// 베이스: Vercel 리라이트용. '/api'는 백엔드로 프록시됨.
 const AUTH_BASE = (import.meta.env.VITE_AUTH_BASE_URL || "/api").replace(/\/+$/, "");
-const PROFILE_EP_ENV = (import.meta.env.VITE_PROFILE_ENDPOINT || "none").trim(); // ← 기본값 'none'으로 조용히
 
+// localStorage keys
 const TOKEN_KEY  = "AUTH_TOKEN";
 const USER_KEY   = "AUTH_USER";
 const RTOKEN_KEY = "AUTH_REFRESH_TOKEN";
 const EXP_KEY    = "AUTH_TOKEN_EXPIRES_AT";
 
+// ------------------------------------------------------------------
+// utils
 function join(base, path) {
   const b = (base || "").replace(/\/+$/, "");
   let p = String(path || "");
-  p = p.replace(/^\/+/, "/");
-  p = p.replace(/^\/api(\/|$)/, "/"); // '/api' 이중 제거
+  p = p.replace(/^\/+/, "/").replace(/^\/api(\/|$)/, "/"); // '/api' 중복 제거
   return b + (p.startsWith("/") ? p : `/${p}`);
 }
 
+// exported helpers
 export function getToken() { return localStorage.getItem(TOKEN_KEY) || ""; }
-export function getUser() {
-  try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); }
-  catch { return null; }
-}
-export function saveUser(user) {
-  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
+export function getUser()  { try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch { return null; } }
+export function saveUser(user) { if (user) localStorage.setItem(USER_KEY, JSON.stringify(user)); }
 export function getAuthHeaders() {
   const t = getToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -39,6 +37,7 @@ export function clearAuth() {
   [TOKEN_KEY, USER_KEY, RTOKEN_KEY, EXP_KEY].forEach(k => localStorage.removeItem(k));
 }
 
+// HTTP helpers
 async function postJSON(path, body, headers = {}) {
   const url = join(AUTH_BASE, path);
   const res = await fetch(url, {
@@ -60,7 +59,8 @@ async function getJSON(path, headers = {}) {
   return data;
 }
 
-// === Auth APIs ===
+// ------------------------------------------------------------------
+// API: 회원가입/로그인
 export async function signup({ email, password, name, birthday, partnerBirthday, startDate, profilePhoto }) {
   return postJSON("/user/signIn", {
     email, password, name,
@@ -74,43 +74,18 @@ export async function login({ email, password }) {
   return postJSON("/user/login", { email, password });
 }
 
-// === Profile ===
-// 기본 동작: 네트워크 요청 "안 함"(none). 필요 시 환경변수로만 켭니다.
-//   VITE_PROFILE_ENDPOINT=none        → 요청 안 보냄(로컬만 반환)
-//   VITE_PROFILE_ENDPOINT=/home/home  → 해당 경로만 호출(탐색 X)
-//   VITE_PROFILE_ENDPOINT=auto        → (/home/home, /home)만 짧게 탐색
+// ------------------------------------------------------------------
+// API: 프로필 조회 (DB에서 그대로) — 항상 /api/mypage만 호출
 export async function getHomeInfo() {
-  const mode = PROFILE_EP_ENV.toLowerCase();
-
-  if (mode === "none" || mode === "") {
-    // 조용히 로컬만 반환
-    return getUser() || {};
-  }
-
-  if (PROFILE_EP_ENV.startsWith("/")) {
-    // 고정 경로만 호출
-    return getJSON(PROFILE_EP_ENV, getAuthHeaders());
-  }
-
-  if (mode === "auto") {
-    // 필요한 경우에만 짧게 탐색(404 로그 최소화)
-    const candidates = ["/home/home", "/home"];
-    for (const ep of candidates) {
-      try { return await getJSON(ep, getAuthHeaders()); } catch { /* 다음 후보 */ }
-    }
-    // 실패 시에도 네트워크 재시도 없이 로컬만 반환
-    return getUser() || {};
-  }
-
-  // 알 수 없는 값이면 안전하게 로컬만 반환
-  return getUser() || {};
+  const headers = getAuthHeaders();
+  return getJSON("/mypage", headers); // 최종 요청: GET /api/mypage
 }
 
-// (선택) 프로필 사진 업로드
+// (선택) 프로필 사진 업로드 — 문서 경로 그대로 사용
 export async function uploadProfilePhoto(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(join(AUTH_BASE, "/user/uploadPhoto"), {
+  const res = await fetch(join(AUTH_BASE, "/user/upload/user/uploadPhoto"), {
     method: "POST",
     headers: { ...getAuthHeaders() },
     body: fd,
@@ -118,5 +93,5 @@ export async function uploadProfilePhoto(file) {
   const text = await res.text();
   let data; try { data = JSON.parse(text); } catch { data = { message: text }; }
   if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-  return data;
+  return data; // { photoURL: "https://..." }
 }

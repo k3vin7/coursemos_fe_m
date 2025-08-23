@@ -1,38 +1,34 @@
+// src/components/MyPageModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { getUser as readLocalUser, getHomeInfo } from "../api/auth";
+import { getUser as readLocalUser, getHomeInfo, saveUser, clearAuth } from "../api/auth";
 
 export default function MyPageModal({ open, onClose, onLogout }) {
   const [user, setUser] = useState(() => readLocalUser() || {});
   const [photoURL, setPhotoURL] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!open) return;
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
-    // 1) 로컬 즉시 반영
-    const localUser = readLocalUser() || {};
-    setUser(localUser);
-    setPhotoURL(localUser.photoURL || localUser.profilePhoto || "");
-    setErr("");
-    setLoading(true);
+    const local = readLocalUser() || {};
+    setUser(local);
+    setPhotoURL(local.photoURL || local.profilePhoto || "");
 
-    // 2) 서버 프로필 동기화(엔드포인트 자동 탐색)
+    setLoading(true);
+    // 모달 열릴 때마다 DB에서 최신값 1회
     getHomeInfo()
-      .then((d) => {
-        if (!d || typeof d !== "object") return;
-        const merged = { ...localUser, ...d };
+      .then((me) => {
+        if (!me || typeof me !== "object") return;
+        const merged = { ...local, ...me };
         setUser(merged);
-        setPhotoURL(d.photoURL || d.profilePhoto || merged.photoURL || "");
-        try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
+        setPhotoURL(me.photoURL || me.profilePhoto || merged.photoURL || "");
+        saveUser(merged); // 앱 상태 최신화
       })
-      .catch((e) => {
-        // 로컬 값이 있으면 에러 숨김(UX)
-        const hasLocal = !!(localUser?.email || localUser?.name || localUser?.nickname || localUser?.username);
-        if (!hasLocal) setErr(e.message || "프로필을 불러올 수 없습니다.");
+      .catch(() => {
+        // /api/mypage가 아직 없거나 권한문제면 로컬 값만 표시
       })
       .finally(() => setLoading(false));
 
@@ -41,8 +37,8 @@ export default function MyPageModal({ open, onClose, onLogout }) {
 
   if (!open) return null;
 
-  const displayName = user?.name || user?.nickname || user?.username || "";
-  const displayEmail = user?.email || "";
+  const displayName = user?.name || user?.nickname || user?.username || "이름 미지정";
+  const displayEmail = user?.email || "이메일 미지정";
 
   const avatar = photoURL
     ? <img src={photoURL} alt="프로필" className="w-20 h-20 rounded-full object-cover border" />
@@ -51,6 +47,11 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         {(displayName?.[0] || displayEmail?.[0] || "🙂")}
       </div>
     );
+
+  function handleLogout() {
+    clearAuth();
+    onLogout?.(); // 부모에서 로그인 모달 다시 띄우도록 연결되어 있을 것
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] bg-black/40 grid place-items-center">
@@ -63,13 +64,9 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         <div className="flex items-center gap-4 mb-5">
           {avatar}
           <div>
-            <p className="text-base font-semibold">{displayName || "이름 미지정"}</p>
-            <p className="text-sm text-gray-500">{displayEmail || "이메일 미지정"}</p>
-            {loading && <p className="text-xs text-gray-400 mt-1">프로필 동기화 중…</p>}
-            {/* 로컬 값도 없고 서버도 실패한 경우에만 에러 노출 */}
-            {err && !loading && !displayName && !displayEmail && (
-              <p className="text-xs text-rose-600 mt-1">{err}</p>
-            )}
+            <p className="text-base font-semibold">{displayName}</p>
+            <p className="text-sm text-gray-500">{displayEmail}</p>
+            {loading && <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>}
           </div>
         </div>
 
@@ -82,7 +79,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         <div className="mt-6 flex items-center justify-between">
           <span className="text-sm text-gray-400">로그인된 상태</span>
           <button
-            onClick={onLogout}
+            onClick={handleLogout}
             className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
           >
             로그아웃
