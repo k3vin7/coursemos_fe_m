@@ -20,21 +20,20 @@ import { isLoggedIn, clearAuth } from "./api/auth.js";
 export default function App() {
   // ===== 페이지/슬라이드 =====
   const [index, setIndex] = useState(1); // 1 = Intro
-  const [dir, setDir] = useState("right");
+  const [dir, setDir] = useState("left"); // ← '스와이프 방향' 저장
   const startXRef = useRef(0);
   const startYRef = useRef(0);
   const isMouseDownRef = useRef(false);
 
-  // ★ 전환 락 (왕복 스와이프 떨림 방지)
+  // 전환 락
   const SLIDE_MS = 200;
   const animatingRef = useRef(false);
 
   // ===== 로그인 상태 & 모달 =====
   const [authed, setAuthed] = useState(isLoggedIn());
-  const [authOpen, setAuthOpen] = useState(!isLoggedIn()); // 미로그인이면 처음부터 로그인 모달
+  const [authOpen, setAuthOpen] = useState(!isLoggedIn());
   const [myOpen, setMyOpen] = useState(false);
 
-  // 첫 마운트 동기화(모달/버튼 상태 맞춤)
   useEffect(() => {
     const ok = isLoggedIn();
     setAuthed(ok);
@@ -79,14 +78,14 @@ export default function App() {
 
   const onTouchEnd = (e) => {
     if (authOpen || myOpen) return;
-    if (animatingRef.current) return; // 전환 중엔 무시
+    if (animatingRef.current) return;
     const t = e.changedTouches?.[0];
     if (!t) return;
     const dx = t.clientX - startXRef.current;
     const dy = t.clientY - startYRef.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-      if (dx < 0) go(index + 1);
-      else go(index - 1);
+      if (dx < 0) go(index + 1, "left");   // ← 왼쪽 스와이프
+      else        go(index - 1, "right");  // ← 오른쪽 스와이프
     }
   };
 
@@ -101,30 +100,30 @@ export default function App() {
     if (authOpen || myOpen) return;
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
-    if (animatingRef.current) return; // 전환 중엔 무시
+    if (animatingRef.current) return;
     const dx = e.clientX - startXRef.current;
     const dy = e.clientY - startYRef.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
-      if (dx < 0) go(index + 1);
-      else go(index - 1);
+      if (dx < 0) go(index + 1, "left");
+      else        go(index - 1, "right");
     }
   };
 
-  // ===== 페이지 이동 =====
-  const go = (next) => {
-    if (animatingRef.current) return; // 전환 중엔 무시
+  // ===== 페이지 이동 (스와이프 방향을 명시적으로 받음) =====
+  const go = (next, swipe) => {
+    if (animatingRef.current) return;
 
     setIndex((prev) => {
       if (next === prev || next < 0 || next > 6) return prev;
 
-      // 방향 먼저 결정
-      setDir(next > prev ? "right" : "left");
+      // swipe가 명시되지 않으면: forward=left, backward=right로 기본값
+      const fallback = next > prev ? "left" : "right";
+      const useSwipe = swipe || fallback;
 
-      // ★ 락 온
+      setDir(useSwipe);
       animatingRef.current = true;
       setTimeout(() => (animatingRef.current = false), SLIDE_MS + 60);
 
-      // 결과로 '처음' 진입할 때 추천 호출
       if (next === 6 && prev !== 6) requestRecommendAndShow();
 
       return next;
@@ -133,7 +132,6 @@ export default function App() {
 
   // ===== 추천 실행 =====
   async function requestRecommendAndShow() {
-    // 여기서 setIndex(6) 하지 않음 (중복 전환/깜빡임 원인)
     setLoading(true);
     setError("");
     setResult(null);
@@ -146,7 +144,7 @@ export default function App() {
       const lat = place?.lat ?? 37.5665;
       const lng = place?.lng ?? 126.9780;
       const addr = (place?.address || "").trim();
-      const location = addr ? addr : `${lat},${lng}`; // 서버 요구: 문자열
+      const location = addr ? addr : `${lat},${lng}`;
 
       const payload = {
         date: useDate.toISOString().slice(0, 10),
@@ -171,10 +169,10 @@ export default function App() {
         return (
           <PageSlide key="intro" dir={dir} duration={SLIDE_MS / 1000}>
             <Intro
-              onSwipeRight={() => go(2)} // 오른쪽 → Date
-              onSwipeLeft={() => go(0)}  // 왼쪽 → AI
-              showUserButton={!(authOpen || myOpen)} // 모달 떠있으면 숨김
-              isAuthed={authed}                      // 라벨 토글
+              onSwipeLeft={() => go(2, "left")}   // ← 다음: date
+              onSwipeRight={() => go(0, "right")} // ← 이전: recom ai
+              showUserButton={!(authOpen || myOpen)}
+              isAuthed={authed}
               onUserButtonClick={() =>
                 authed ? setMyOpen(true) : setAuthOpen(true)
               }
@@ -185,7 +183,7 @@ export default function App() {
         return (
           <PageSlide key="ai" dir={dir} duration={SLIDE_MS / 1000}>
             <Recommendation_AI
-              onNext={() => go(2)}
+              onNext={() => go(1, "left")}            // ← 다음: intro
               onRequestRecommend={requestRecommendAndShow}
             />
           </PageSlide>
@@ -196,19 +194,19 @@ export default function App() {
             <Optional_Date
               value={date}
               onChange={setDate}
-              onNext={() => go(3)}
-              onPrev={() => go(1)}
+              onNext={() => go(3, "left")}
+              onPrev={() => go(1, "right")}
             />
           </PageSlide>
         );
       case 3:
         return (
           <PageSlide key="time" dir={dir} duration={SLIDE_MS / 1000}>
-            <Optional_Time
+          <Optional_Time
               value={time}
               onChange={setTime}
-              onNext={() => go(4)}
-              onPrev={() => go(2)}
+              onNext={() => go(4, "left")}
+              onPrev={() => go(2, "right")}
             />
           </PageSlide>
         );
@@ -218,8 +216,8 @@ export default function App() {
             <Optional_Place
               value={place}
               onChange={setPlace}
-              onNext={() => go(5)}
-              onPrev={() => go(3)}
+              onNext={() => go(5, "left")}
+              onPrev={() => go(3, "right")}
             />
           </PageSlide>
         );
@@ -229,8 +227,8 @@ export default function App() {
             <Optional_Etc
               value={etc}
               onChange={setEtc}
-              onNext={() => go(6)}
-              onPrev={() => go(4)}
+              onNext={() => go(6, "left")}
+              onPrev={() => go(4, "right")}
               onSubmit={requestRecommendAndShow}
             />
           </PageSlide>
@@ -242,7 +240,7 @@ export default function App() {
               loading={loading}
               error={error}
               result={result}
-              onPrev={() => go(5)}
+              onPrev={() => go(5, "right")}
             />
           </PageSlide>
         );
@@ -253,13 +251,13 @@ export default function App() {
 
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden bg-white"  // ★ relative 추가
+      className="relative h-screen w-screen overflow-hidden bg-white"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
     >
-      {/* custom={dir}로 현재 방향을 하위 모션에 전달 */}
+      {/* custom에 현재 '스와이프 방향'을 전달 */}
       <AnimatePresence mode="wait" initial={false} custom={dir}>
         {renderScreen()}
       </AnimatePresence>

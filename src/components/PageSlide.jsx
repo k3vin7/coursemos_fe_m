@@ -1,33 +1,29 @@
 import { motion } from "framer-motion";
-import { useRef } from "react";
 
 export default function PageSlide({
   children,
-  dir = "right",
+  dir = "left",      // ← '사용자 스와이프 방향': "left" or "right"
   duration = 0.20,
   className = "",
 }) {
-  // 이 인스턴스가 "처음 마운트될 때"의 방향을 고정
-  const stableDirRef = useRef();
-  if (stableDirRef.current == null) stableDirRef.current = dir;
-  const d = stableDirRef.current;
-
+  // 스와이프 방향 기준으로: left 스와이프면
+  // - 나가는 화면: 왼쪽(-100%)으로 퇴장
+  // - 들어오는 화면: 오른쪽(100%)에서 입장
   const variants = {
-    initial: (dd) => ({ x: dd === "right" ? "100%" : "-100%" }),
+    initial: (swipe) => ({ x: swipe === "left" ? "100%" : "-100%" }),
     animate: { x: 0 },
-    exit:    (dd) => ({ x: dd === "right" ? "-100%" : "100%" }),
+    exit:    (swipe) => ({ x: swipe === "left" ? "-100%" : "100%" }),
   };
 
   return (
     <motion.div
-      custom={d}                       // 고정된 방향을 variants로 전달
+      custom={dir}
       variants={variants}
       initial="initial"
       animate="animate"
       exit="exit"
       transition={{ type: "tween", ease: "linear", duration }}
-      // 전환 중 겹쳐서 미는 구조 (부모는 relative 여야 함)
-      style={{ position: "absolute", inset: 0 }}
+      style={{ position: "absolute", inset: 0 }}   // 겹쳐서 미는 레이아웃
       className={`will-change-transform transform-gpu overflow-hidden ${className}`}
     >
       {children}
