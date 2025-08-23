@@ -14,7 +14,7 @@ import TutorialOverlay from "./components/TutorialOverlay.jsx";
 import AuthModal from "./components/AuthModal.jsx";
 import MyPageModal from "./components/MyPageModal.jsx";
 
-import { postRecommend } from "./recommend.js";
+import { postRecommend } from "./api/recommend.js";
 import { isLoggedIn, clearAuth } from "./api/auth.js";
 
 export default function App() {

@@ -1,36 +1,55 @@
-export default function Intro({
-  // 기존에 사용하던 props는 그대로 받도록 열어둠
-  onStartLeft,
-  onStartRight,
+// src/pages/Intro.jsx
+import { useRef } from "react";
 
-  // ✅ 추가된 3개
-  showUserButton = false,        // 모달 열려있으면 false로 내려옴 → 버튼 렌더 안 함
-  isAuthed = false,              // true면 '마이페이지', false면 '로그인'
-  onUserButtonClick = () => {},  // 클릭 시 동작(로그인 모달 / 마이페이지 모달)
-}) {
+export default function Intro({ onSwipeRight, onSwipeLeft, onMyPage }) {
+  const startX = useRef(null);
+  const locked = () => Boolean(window.__SWIPE_DISABLED);
+
+  const handleTouchStart = (e) => {
+    if (locked()) { startX.current = null; return; }
+    startX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e) => {
+    if (locked()) { startX.current = null; return; }
+    if (startX.current === null) return;
+    const dx = e.changedTouches[0].clientX - startX.current;
+    const threshold = 50;
+    if (dx > threshold) onSwipeRight?.();
+    if (dx < -threshold) onSwipeLeft?.();
+    startX.current = null;
+  };
+
   return (
-    <div className="relative w-full h-full">
-      {/* ✅ 우상단 사용자 버튼(조건부 렌더). className은 필요하면 네 기존 값으로 바꿔도 됨 */}
-      {showUserButton && (
-        <button
-          type="button"
-          onClick={onUserButtonClick}
-          className="absolute top-4 right-4 rounded-full border px-4 h-9 bg-white shadow-sm hover:bg-gray-50"
-        >
-          {isAuthed ? "마이페이지" : "로그인"}
-        </button>
-      )}
+    <div
+      className="h-screen overflow-hidden relative"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* 오른쪽 스와이프 힌트 (장식 요소는 클릭 막지 않도록) */}
+      <p className="absolute top-[12vh] right-0 px-2 pointer-events-none">추천 데이트 코스는 여기!!</p>
+      <div className="absolute flex flex-col items-end top-[15vh] right-0 pointer-events-none">
+        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-l-3xl bg-[#FABAE170] shadow-xl">
+          <div className="flex items-center justify-center">
+            <p className="mr-3 font-semibold text-gray-500">오른쪽으로 스와이프!</p>
+            <img src="/RightArrow.png" alt="" className="pointer-events-none" />
+          </div>
+        </div>
+      </div>
 
-      {/*
-        ▼▼▼ 여기 아래부터는 너의 기존 Intro 콘텐츠를 그대로 둬.
-        (텍스트/가이드/버튼/일러스트 등 기존 마크업 전부 유지)
-      */}
+      {/* 워터마크(전체를 덮지만 클릭은 통과) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <img src="/watermark.png" alt="워터마크" className="max-w-[80vw] max-h-[60vh]" />
+      </div>
 
-      {/* 예시: 기존에 있던 시작 버튼(그대로 유지) */}
-      <div className="pointer-events-auto">
-        {/* 오른쪽/왼쪽 이동용 기존 트리거가 있다면 그대로 */}
-        {/* 필요 없으면 이 블록은 삭제해도 됨 */}
-        <div className="sr-only">{/* 접근성용 자리표시자 */}</div>
+      {/* 왼쪽 스와이프 힌트 */}
+      <div className="absolute flex flex-col items-start bottom-[15vh] left-0 pointer-events-none">
+        <p className="px-2">간단한 정보 입력으로 맞춤 코스 추천!</p>
+        <div className="flex items-center justify-center h-[5vh] w-[50vw] rounded-r-3xl bg-[#ADC3FF70] shadow-xl">
+          <div className="flex items-center justify-center">
+            <img src="/LeftArrow.png" alt="" className="pointer-events-none" />
+            <p className="ml-3 font-semibold text-gray-500">왼쪽으로 스와이프!</p>
+          </div>
+        </div>
       </div>
     </div>
   );
