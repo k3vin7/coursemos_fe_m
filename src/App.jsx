@@ -143,7 +143,7 @@ export default function App() {
       };
 
       const data = await postRecommend(payload);
-      setResult(data);
+      setResult(data?.courses ? data : (data?.data ?? data?.result ?? data));
     } catch (e) {
       setError(e?.message || "추천 실패");
     } finally {
