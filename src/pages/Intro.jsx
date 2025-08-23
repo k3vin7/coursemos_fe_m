@@ -10,7 +10,7 @@ export default function Intro({
   const startX = useRef(null);
   const locked = () => Boolean(window.__SWIPE_DISABLED);
 
-  const THRESHOLD = 50; // ← 이만큼 넘으면 색 진하게
+  const THRESHOLD = 40; // ← 이만큼 넘으면 색 진하게
 
   // 실시간 반지름(px)
   const [rRight, setRRight] = useState(0); // 오른쪽 스와이프(→) 하단 블루
@@ -46,15 +46,15 @@ export default function Intro({
 
     if (dx > 0) {
       // 오른쪽 스와이프: 하단 블루(왼쪽 가장자리 중심) 확장
-      setRRight(clamp(28 + dx, 28, MAX_R));
-      setRLeft(28);
+      setRRight(clamp(0 + dx, 0, MAX_R));
+      setRLeft(0);
       setHitRight(dx >= THRESHOLD);
       setHitLeft(false);
     } else if (dx < 0) {
       // 왼쪽 스와이프: 상단 핑크(오른쪽 가장자리 중심) 확장
       const amt = -dx;
-      setRLeft(clamp(28 + amt, 28, MAX_R));
-      setRRight(28);
+      setRLeft(clamp(0 + amt, 0, MAX_R));
+      setRRight(0);
       setHitLeft(amt >= THRESHOLD);
       setHitRight(false);
     } else {
