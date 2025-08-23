@@ -1,14 +1,23 @@
 // src/components/AuthModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { login, signup, saveAuth, saveUser, getUser } from "../api/auth";
+import {
+  login,
+  signup,
+  saveAuth,
+  saveUser,
+  getUser,
+  getHomeInfo, // ✅ 로그인/가입 후 서버 프로필 동기화
+} from "../api/auth";
 
 export default function AuthModal({ open, onSuccess, onSkip }) {
   useEffect(() => {
     if (!open) return;
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
-    return () => { window.__SWIPE_DISABLED = prev; };
+    return () => {
+      window.__SWIPE_DISABLED = prev;
+    };
   }, [open]);
 
   if (!open) return null;
@@ -51,30 +60,18 @@ function Body({ onSuccess }) {
   const canSubmit = mode === "login" ? email && pw : name && email && pw;
 
   const normalizeEmail = (v) => String(v || "").trim().toLowerCase();
-  const clean = () => ({
-    email: normalizeEmail(email),
-    password: String(pw || "").trim(),
-    name: String(name || "").trim(),
-    birthday: birthday || "",
-    partnerBirthday: partnerBirthday || "",
-    startDate: startDate || "",
-  });
 
-  async function autoLogin(email, password) {
-    // 가입 응답에 token이 없을 때만 호출
-    const data = await login({ email, password });
-    saveAuth({
-      token: data?.token,
-      refreshToken: data?.refreshToken,
-      expiresIn: Number(data?.expiresIn),
-      user: data?.user || null,
-    });
-    // 응답에 user가 없으면 최소 이메일은 보장
-    if (!data?.user) {
-      const prev = getUser() || {};
-      saveUser({ ...prev, email });
+  async function syncProfileFromServer() {
+    try {
+      const me = await getHomeInfo(); // ✅ 백엔드 프로필 조회
+      if (me && typeof me === "object") {
+        // 기존 로컬 값과 병합 저장
+        const prev = getUser() || {};
+        saveUser({ ...prev, ...me });
+      }
+    } catch {
+      // 프로필 API가 아직 없거나 실패해도 앱 동작에는 영향 없음
     }
-    return data;
   }
 
   async function handleSubmit(e) {
@@ -83,9 +80,13 @@ function Body({ onSuccess }) {
     setBusy(true);
     setErr("");
 
-    const { email: em, password: pwc, name: nm } = clean();
+    const em = normalizeEmail(email);
+    const pwc = String(pw || "").trim();
+    const nm = String(name || "").trim();
+
     try {
       if (mode === "login") {
+        // 로그인
         const data = await login({ email: em, password: pwc });
         saveAuth({
           token: data?.token,
@@ -93,10 +94,18 @@ function Body({ onSuccess }) {
           expiresIn: Number(data?.expiresIn),
           user: data?.user || null,
         });
-        if (!data?.user) {
+
+        // 응답에 user가 있으면 저장, 없으면 최소 이메일만 보장
+        if (data?.user) {
+          saveUser({ ...(getUser() || {}), ...data.user });
+        } else {
           const prev = getUser() || {};
-          saveUser({ ...prev, email: em });
+          if (em) saveUser({ ...prev, email: em });
         }
+
+        // ✅ 서버 프로필 한 번 동기화
+        await syncProfileFromServer();
+
         onSuccess?.({ token: data?.token, user: data?.user });
       } else {
         // 회원가입
@@ -110,23 +119,42 @@ function Body({ onSuccess }) {
         };
         const data = await signup(payload);
 
-        // 1) 가입 응답에 token이 있으면 그대로 로그인 처리
+        // 가입 응답에 token이 오면 저장
         if (data?.token) {
           saveAuth({ token: data.token, user: data?.user || null });
-          // 로컬에도 최소한 폼 값 반영
-          const baseLocal = { email: em, name: nm, birthday, partnerBirthday, startDate };
-          saveUser({ ...(getUser() || {}), ...baseLocal });
-        } else {
-          // 2) token이 없으면 같은 자격증명으로 자동 로그인 1회
-          await autoLogin(em, pwc);
-          // 폼 값도 저장(마이페이지 즉시 표시)
-          const baseLocal = { email: em, name: nm, birthday, partnerBirthday, startDate };
-          saveUser({ ...(getUser() || {}), ...baseLocal });
         }
+
+        // 폼 값은 로컬에도 선반영(마이페이지 즉시 표기)
+        const baseLocal = {
+          email: em,
+          name: nm,
+          birthday,
+          partnerBirthday,
+          startDate,
+        };
+        saveUser({ ...(getUser() || {}), ...baseLocal });
+
+        // ✅ 서버 프로필 동기화(토큰 존재 시)
+        await syncProfileFromServer();
+
+        // 가입 응답에 토큰이 없었다면 동일 자격증명으로 자동 로그인
+        if (!data?.token) {
+          const after = await login({ email: em, password: pwc });
+          saveAuth({
+            token: after?.token,
+            refreshToken: after?.refreshToken,
+            expiresIn: Number(after?.expiresIn),
+            user: after?.user || null,
+          });
+          if (after?.user) {
+            saveUser({ ...(getUser() || {}), ...after.user });
+          }
+          await syncProfileFromServer();
+        }
+
         onSuccess?.({ ok: true });
       }
     } catch (e) {
-      // 서버 메시지 최대한 노출
       setErr(e?.message || "요청 실패");
     } finally {
       setBusy(false);
@@ -218,7 +246,10 @@ function Body({ onSuccess }) {
         {mode === "login" ? "아직 계정이 없나요? " : "이미 계정이 있나요? "}
         <button
           type="button"
-          onClick={() => { setErr(""); setMode(mode === "login" ? "signup" : "login"); }}
+          onClick={() => {
+            setErr("");
+            setMode(mode === "login" ? "signup" : "login");
+          }}
           className="underline underline-offset-2 text-indigo-600"
         >
           {mode === "login" ? "회원가입" : "로그인"}
