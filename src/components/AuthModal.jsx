@@ -1,7 +1,7 @@
 // src/components/AuthModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { login, signup, saveAuth } from "../api/auth";
+import { login, signup, saveAuth, getHomeInfo, saveUser } from "../api/auth";
 
 export default function AuthModal({ open, onSuccess, onSkip }) {
   useEffect(() => {
@@ -36,22 +36,24 @@ function Header() {
 
 function Body({ onSuccess }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
-
-  // 공통 필드
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
-
-  // 회원가입 전용 필드
   const [name, setName] = useState("");
-  const [birthday, setBirthday] = useState("");           // YYYY-MM-DD (optional)
-  const [partnerBirthday, setPartnerBirthday] = useState(""); // YYYY-MM-DD (optional)
-  const [startDate, setStartDate] = useState("");         // YYYY-MM-DD (optional)
+  const [birthday, setBirthday] = useState("");
+  const [partnerBirthday, setPartnerBirthday] = useState("");
+  const [startDate, setStartDate] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const canSubmit =
-    mode === "login" ? email && pw : name && email && pw;
+  const canSubmit = mode === "login" ? email && pw : name && email && pw;
+
+  async function fetchAndStoreProfileSafe() {
+    try {
+      const me = await getHomeInfo();   // 서버 표준 프로필로 동기화
+      if (me) saveUser(me);
+    } catch { /* 프로필 엔드포인트 없으면 무시 */ }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -62,13 +64,15 @@ function Body({ onSuccess }) {
     try {
       if (mode === "login") {
         const data = await login({ email, password: pw });
+        // 서버가 user를 주면 저장, 아니면 토큰만 저장 후 /home/home로 동기화
         saveAuth({
           token: data?.token,
           refreshToken: data?.refreshToken,
           expiresIn: Number(data?.expiresIn),
-          user: null,
+          user: data?.user || null,
         });
-        onSuccess?.({ token: data?.token });
+        if (!data?.user) await fetchAndStoreProfileSafe();
+        onSuccess?.({ token: data?.token, user: data?.user });
       } else {
         const payload = {
           email,
@@ -77,10 +81,11 @@ function Body({ onSuccess }) {
           ...(birthday ? { birthday } : {}),
           ...(partnerBirthday ? { partnerBirthday } : {}),
           ...(startDate ? { startDate } : {}),
-          // profilePhoto는 UI에서 받지 않음
         };
         const data = await signup(payload);
+        // 가입 응답에 user가 없을 수 있으니 동일하게 동기화
         saveAuth({ token: data?.token, user: data?.user });
+        await fetchAndStoreProfileSafe();
         onSuccess?.({ token: data?.token, user: data?.user });
       }
     } catch (e) {
@@ -94,7 +99,6 @@ function Body({ onSuccess }) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <Tabs value={mode} onChange={setMode} />
 
-      {/* 입력 순서: 이름 → 이메일 → 비밀번호 */}
       {mode === "signup" && (
         <input
           type="text"
@@ -126,7 +130,6 @@ function Body({ onSuccess }) {
         required
       />
 
-      {/* 회원가입 모드에서 추가정보 3개: 처음부터 노출(선택 입력) */}
       {mode === "signup" && (
         <div className="grid gap-2 md:grid-cols-3">
           <label className="text-xs text-gray-500">

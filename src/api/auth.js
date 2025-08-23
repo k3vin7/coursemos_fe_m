@@ -15,6 +15,10 @@ function join(base, path) {
   return b + (p.startsWith("/") ? p : `/${p}`);
 }
 
+export function saveUser(user) {
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function getToken() { return localStorage.getItem(TOKEN_KEY) || ""; }
 export function getUser() {
   try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); }

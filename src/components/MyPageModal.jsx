@@ -1,14 +1,12 @@
 // src/components/MyPageModal.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { getUser, getHomeInfo } from "../api/auth";
+import { getUser as readUserFromStorage, getHomeInfo, clearAuth } from "../api/auth";
 
 export default function MyPageModal({ open, onClose, onLogout }) {
+  const [user, setUser] = useState(() => readUserFromStorage() || {});
   const [photoURL, setPhotoURL] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
-  const user = useMemo(() => getUser() || {}, []);
 
   useEffect(() => {
     if (!open) return;
@@ -16,12 +14,24 @@ export default function MyPageModal({ open, onClose, onLogout }) {
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
-    // 프로필 사진 조회(GET /api/home/home) — 토큰 필요
+    // 1) 저장된 로컬 값으로 먼저 표시
+    setUser(readUserFromStorage() || {});
+    // 2) 서버에서 최신 프로필 동기화
     setLoading(true);
-    setErr("");
     getHomeInfo()
-      .then((d) => setPhotoURL(d?.photoURL || ""))
-      .catch(() => {}) // 사진 없으면 무시
+      .then((d) => {
+        if (!d) return;
+        // 서버 필드명을 추정해서 합침(있는 것만 덮어씀)
+        const merged = {
+          ...readUserFromStorage(),
+          ...d,
+        };
+        setUser(merged);
+        setPhotoURL(d.photoURL || d.profilePhoto || "");
+        // 로컬도 최신으로(다음에 마이페이지 열어도 보이게)
+        try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
 
     return () => { window.__SWIPE_DISABLED = prev; };
@@ -42,21 +52,15 @@ export default function MyPageModal({ open, onClose, onLogout }) {
       <div className="w-[92vw] max-w-[560px] bg-white rounded-3xl shadow-2xl border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold">마이페이지</h3>
-          <button
-            onClick={onClose}
-            className="px-3 h-9 rounded-lg border text-gray-600 hover:bg-gray-50"
-          >
-            닫기
-          </button>
+          <button onClick={onClose} className="px-3 h-9 rounded-lg border text-gray-600 hover:bg-gray-50">닫기</button>
         </div>
 
         <div className="flex items-center gap-4 mb-5">
           {avatar}
           <div>
-            <p className="text-base font-semibold">{user?.name || "이름 미지정"}</p>
+            <p className="text-base font-semibold">{user?.name || user?.nickname || user?.username || "이름 미지정"}</p>
             <p className="text-sm text-gray-500">{user?.email || "이메일 미지정"}</p>
-            {loading && <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>}
-            {err && <p className="text-xs text-rose-600 mt-1">{err}</p>}
+            {loading && <p className="text-xs text-gray-400 mt-1">프로필 동기화 중…</p>}
           </div>
         </div>
 
@@ -67,7 +71,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          <span className="text-sm text-gray-400">로그인 후 토큰으로 보호됨</span>
+          <span className="text-sm text-gray-400">로그인된 상태</span>
           <button
             onClick={onLogout}
             className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
