@@ -10,6 +10,24 @@ import {
   clearAuth,
 } from "../api/auth";
 
+/* ---------- 날짜 포맷: "YYYY-MM-DD"만 표시 ---------- */
+// "2002-07-26T00:00:00.000Z" → "2002-07-26"
+const dateOnly = (v) => {
+  if (!v) return "";
+  if (typeof v === "string") {
+    // 문자열이면 맨 앞의 YYYY-MM-DD만 취함
+    const m = v.match(/^\d{4}-\d{2}-\d{2}/);
+    if (m) return m[0];
+    // 혹시 다른 문자열이면 T 기준으로 잘라보기
+    const i = v.indexOf("T");
+    return i > 0 ? v.slice(0, i) : v;
+  }
+  // Date 객체 등은 안전하게 ISO로 변환 후 앞 10자리
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return String(v);
+};
+
 export default function MyPageModal({ open, onClose, onLogout }) {
   const [user, setUser] = useState(() => readLocalUser() || {});
   const [photoURL, setPhotoURL] = useState("");
@@ -53,16 +71,21 @@ export default function MyPageModal({ open, onClose, onLogout }) {
               });
             }
           }
-        } catch {/* ignore */}
+        } catch {
+          /* ignore */
+        }
         setLoading(false);
       });
 
-    return () => { window.__SWIPE_DISABLED = prev; };
+    return () => {
+      window.__SWIPE_DISABLED = prev;
+    };
   }, [open]);
 
   if (!open) return null;
 
-  const displayName = user?.name || user?.nickname || user?.username || "이름 미지정";
+  const displayName =
+    user?.name || user?.nickname || user?.username || "이름 미지정";
   const displayEmail = user?.email || "이메일 미지정";
 
   async function onUploadChange(e) {
@@ -96,44 +119,73 @@ export default function MyPageModal({ open, onClose, onLogout }) {
       <div className="w-[92vw] max-w-[560px] bg-white rounded-3xl shadow-2xl border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold">마이페이지</h3>
-          <button onClick={onClose} className="px-3 h-9 rounded-lg border text-gray-600 hover:bg-gray-50">닫기</button>
+          <button
+            onClick={onClose}
+            className="px-3 h-9 rounded-lg border text-gray-600 hover:bg-gray-50"
+          >
+            닫기
+          </button>
         </div>
 
         <div className="flex items-center gap-4 mb-5">
-          {photoURL
-            ? <img src={photoURL} alt="프로필" className="w-20 h-20 rounded-full object-cover border" />
-            : <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
-                {(displayName?.[0] || displayEmail?.[0] || "🙂")}
-              </div>}
+          {photoURL ? (
+            <img
+              src={photoURL}
+              alt="프로필"
+              className="w-20 h-20 rounded-full object-cover border"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
+              {displayName?.[0] || displayEmail?.[0] || "🙂"}
+            </div>
+          )}
           <div className="flex-1">
             <p className="text-base font-semibold">{displayName}</p>
             <p className="text-sm text-gray-500">{displayEmail}</p>
-            {loading && <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>}
-            {err && !loading && <p className="text-xs text-rose-600 mt-1">{err}</p>}
+            {loading && (
+              <p className="text-xs text-gray-400 mt-1">프로필 불러오는 중…</p>
+            )}
+            {err && !loading && (
+              <p className="text-xs text-rose-600 mt-1">{err}</p>
+            )}
           </div>
           <div className="shrink-0">
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUploadChange} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={onUploadChange}
+            />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               className="px-3 h-9 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-60"
             >
-              {uploading ? "업로드 중…" : "사진 변경"}
+              {uploading ? "업로드 중…" : <>사진<br />변경</>}
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Info label="내 생일" value={user?.birthday} />
-          <Info label="파트너 생일" value={user?.partnerBirthday} />
-          <Info label="기념일(시작일)" value={user?.startDate} />
-          <Info label="연애일수" value={user?.daysTogether != null ? String(user.daysTogether) : undefined} />
+          {/* ⬇️ 날짜 세 곳은 시간 제거해서 표시 */}
+          <Info label="내 생일" value={dateOnly(user?.birthday)} />
+          <Info label="애인 생일" value={dateOnly(user?.partnerBirthday)} />
+          <Info label="기념일(시작일)" value={dateOnly(user?.startDate)} />
+          <Info
+            label="연애일수"
+            value={
+              user?.daysTogether != null ? String(user.daysTogether) : undefined
+            }
+          />
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          <span className="text-sm text-gray-400">로그인된 상태</span>
-          <button onClick={handleLogout} className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95">
+          <button
+            onClick={handleLogout}
+            className="px-4 h-10 rounded-xl bg-black text-white hover:opacity-90 active:scale-95"
+          >
             로그아웃
           </button>
         </div>
