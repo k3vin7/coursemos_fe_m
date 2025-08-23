@@ -1,4 +1,3 @@
-// src/components/MyPageModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getUser as readLocalUser, getHomeInfo } from "../api/auth";
@@ -14,26 +13,26 @@ export default function MyPageModal({ open, onClose, onLogout }) {
     const prev = window.__SWIPE_DISABLED;
     window.__SWIPE_DISABLED = true;
 
-    // 먼저 로컬 값으로 즉시 표기
-    setUser(readLocalUser() || {});
+    // 1) 로컬 즉시 반영
+    const localUser = readLocalUser() || {};
+    setUser(localUser);
+    setPhotoURL(localUser.photoURL || localUser.profilePhoto || "");
     setErr("");
     setLoading(true);
 
-    // 서버에서 가능한 엔드포인트 자동 탐색 후 최신 프로필 동기화
+    // 2) 서버 프로필 동기화(엔드포인트 자동 탐색)
     getHomeInfo()
       .then((d) => {
-        if (d && typeof d === "object") {
-          setUser((prevUser) => {
-            const merged = { ...prevUser, ...d };
-            try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
-            return merged;
-          });
-          setPhotoURL(d.photoURL || d.profilePhoto || "");
-        }
+        if (!d || typeof d !== "object") return;
+        const merged = { ...localUser, ...d };
+        setUser(merged);
+        setPhotoURL(d.photoURL || d.profilePhoto || merged.photoURL || "");
+        try { localStorage.setItem("AUTH_USER", JSON.stringify(merged)); } catch {}
       })
       .catch((e) => {
-        // 프로필 엔드포인트가 없거나 404여도 로컬만으로 표시 가능하니 경고만
-        setErr(e.message || "프로필을 불러올 수 없습니다.");
+        // 로컬 값이 있으면 에러 숨김(UX)
+        const hasLocal = !!(localUser?.email || localUser?.name || localUser?.nickname || localUser?.username);
+        if (!hasLocal) setErr(e.message || "프로필을 불러올 수 없습니다.");
       })
       .finally(() => setLoading(false));
 
@@ -42,11 +41,14 @@ export default function MyPageModal({ open, onClose, onLogout }) {
 
   if (!open) return null;
 
+  const displayName = user?.name || user?.nickname || user?.username || "";
+  const displayEmail = user?.email || "";
+
   const avatar = photoURL
     ? <img src={photoURL} alt="프로필" className="w-20 h-20 rounded-full object-cover border" />
     : (
       <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
-        {(user?.name?.[0] || user?.email?.[0] || "🙂")}
+        {(displayName?.[0] || displayEmail?.[0] || "🙂")}
       </div>
     );
 
@@ -61,10 +63,13 @@ export default function MyPageModal({ open, onClose, onLogout }) {
         <div className="flex items-center gap-4 mb-5">
           {avatar}
           <div>
-            <p className="text-base font-semibold">{user?.name || user?.nickname || user?.username || "이름 미지정"}</p>
-            <p className="text-sm text-gray-500">{user?.email || "이메일 미지정"}</p>
+            <p className="text-base font-semibold">{displayName || "이름 미지정"}</p>
+            <p className="text-sm text-gray-500">{displayEmail || "이메일 미지정"}</p>
             {loading && <p className="text-xs text-gray-400 mt-1">프로필 동기화 중…</p>}
-            {err && !loading && <p className="text-xs text-rose-600 mt-1">{err}</p>}
+            {/* 로컬 값도 없고 서버도 실패한 경우에만 에러 노출 */}
+            {err && !loading && !displayName && !displayEmail && (
+              <p className="text-xs text-rose-600 mt-1">{err}</p>
+            )}
           </div>
         </div>
 

@@ -1,7 +1,6 @@
-// src/components/AuthModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { login, signup, saveAuth, getHomeInfo, saveUser } from "../api/auth";
+import { login, signup, saveAuth, getHomeInfo, saveUser, getUser } from "../api/auth";
 
 export default function AuthModal({ open, onSuccess, onSkip }) {
   useEffect(() => {
@@ -36,6 +35,8 @@ function Header() {
 
 function Body({ onSuccess }) {
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
+
+  // 폼 값
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [name, setName] = useState("");
@@ -50,9 +51,14 @@ function Body({ onSuccess }) {
 
   async function fetchAndStoreProfileSafe() {
     try {
-      const me = await getHomeInfo();   // 서버 표준 프로필로 동기화
-      if (me) saveUser(me);
-    } catch { /* 프로필 엔드포인트 없으면 무시 */ }
+      const me = await getHomeInfo();   // 서버 프로필(있으면)
+      if (me) {
+        // 서버 응답으로 최종 동기화
+        saveUser({ ...(getUser() || {}), ...me });
+      }
+    } catch {
+      // 404 등 → 무시 (로컬 값으로 이미 표시 가능)
+    }
   }
 
   async function handleSubmit(e) {
@@ -64,14 +70,23 @@ function Body({ onSuccess }) {
     try {
       if (mode === "login") {
         const data = await login({ email, password: pw });
-        // 서버가 user를 주면 저장, 아니면 토큰만 저장 후 /home/home로 동기화
+
+        // 토큰 저장
         saveAuth({
           token: data?.token,
           refreshToken: data?.refreshToken,
           expiresIn: Number(data?.expiresIn),
           user: data?.user || null,
         });
-        if (!data?.user) await fetchAndStoreProfileSafe();
+
+        // 응답에 user가 없더라도 최소한 폼의 email은 저장 (마이페이지 즉시 표기용)
+        if (!data?.user) {
+          const prev = getUser() || {};
+          saveUser({ ...prev, email });
+        }
+
+        // 서버 프로필 있으면 병합 반영
+        await fetchAndStoreProfileSafe();
         onSuccess?.({ token: data?.token, user: data?.user });
       } else {
         const payload = {
@@ -83,8 +98,15 @@ function Body({ onSuccess }) {
           ...(startDate ? { startDate } : {}),
         };
         const data = await signup(payload);
-        // 가입 응답에 user가 없을 수 있으니 동일하게 동기화
-        saveAuth({ token: data?.token, user: data?.user });
+
+        // 토큰 & (있다면) 서버 user 저장
+        saveAuth({ token: data?.token, user: data?.user || null });
+
+        // 서버 user가 없을 수도 있으니 폼 값으로 로컬 선저장
+        const baseLocal = { email, name, birthday, partnerBirthday, startDate };
+        saveUser({ ...(getUser() || {}), ...baseLocal });
+
+        // 서버 프로필 있으면 병합 반영
         await fetchAndStoreProfileSafe();
         onSuccess?.({ token: data?.token, user: data?.user });
       }
@@ -133,7 +155,7 @@ function Body({ onSuccess }) {
       {mode === "signup" && (
         <div className="grid gap-2 md:grid-cols-3">
           <label className="text-xs text-gray-500">
-            본인 생일
+            내 생일
             <input
               type="date"
               value={birthday}
@@ -196,18 +218,14 @@ function Tabs({ value, onChange }) {
       <button
         type="button"
         onClick={() => onChange("login")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${
-          value === "login" ? "bg-white shadow border" : "text-gray-600"
-        }`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${value === "login" ? "bg-white shadow border" : "text-gray-600"}`}
       >
         로그인
       </button>
       <button
         type="button"
         onClick={() => onChange("signup")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${
-          value === "signup" ? "bg-white shadow border" : "text-gray-600"
-        }`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${value === "signup" ? "bg-white shadow border" : "text-gray-600"}`}
       >
         회원가입
       </button>
