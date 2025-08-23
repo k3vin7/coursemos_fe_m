@@ -1,10 +1,20 @@
 // src/api/auth.js
-const AUTH_BASE = (import.meta.env.VITE_AUTH_BASE_URL || "/api").replace(/\/$/, "");
+const AUTH_BASE = (import.meta.env.VITE_AUTH_BASE_URL || "/api").replace(/\/+$/, "");
 
 const TOKEN_KEY  = "AUTH_TOKEN";
 const USER_KEY   = "AUTH_USER";
 const RTOKEN_KEY = "AUTH_REFRESH_TOKEN";
 const EXP_KEY    = "AUTH_TOKEN_EXPIRES_AT";
+
+// ---- 공통: URL 조립 시 '/api' 이중중복 제거 ----
+function join(base, path) {
+  const b = (base || "").replace(/\/+$/, "");               // '/api'
+  let p = String(path || "");                               // 입력 path
+  p = p.replace(/^\/+/, "/");                               // 앞 슬래시 1개로
+  p = p.replace(/^\/api(\/|$)/, "/");                       // ← 선두의 '/api' 제거
+  return b + (p.startsWith("/") ? p : `/${p}`);             // '/api' + '/user/login'
+}
+// -----------------------------------------------
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -31,7 +41,8 @@ export function clearAuth() {
 }
 
 async function postJSON(path, body, headers = {}) {
-  const res = await fetch(`${AUTH_BASE}${path}`, {
+  const url = join(AUTH_BASE, path);
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body || {}),
@@ -42,7 +53,8 @@ async function postJSON(path, body, headers = {}) {
   return data;
 }
 async function getJSON(path, headers = {}) {
-  const res = await fetch(`${AUTH_BASE}${path}`, {
+  const url = join(AUTH_BASE, path);
+  const res = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json", ...headers },
   });
@@ -52,30 +64,17 @@ async function getJSON(path, headers = {}) {
   return data;
 }
 
-// ✅ 여기서부터 path에 'api' 넣지 마세요. (베이스가 이미 /api)
-export async function signup({
-  email,
-  password,
-  name,
-  birthday,          // YYYY-MM-DD (optional)
-  partnerBirthday,   // YYYY-MM-DD (optional)
-  startDate,         // YYYY-MM-DD (optional)
-  profilePhoto,      // URL (optional)
-}) {
-  return postJSON("/user/signIn", {
-    email, password, name, birthday, partnerBirthday, startDate, profilePhoto,
-  });
+// --- 실제 API들: 경로는 '/user/…', '/home/…' 처럼만 쓰면 됨 ---
+export async function signup({ email, password, name, birthday, partnerBirthday, startDate, profilePhoto }) {
+  return postJSON("/user/signIn", { email, password, name, birthday, partnerBirthday, startDate, profilePhoto });
 }
-
 export async function login({ email, password }) {
   return postJSON("/user/login", { email, password });
 }
-
-// 필요 시 사용(엔드포인트는 서버 명세에 맞게 한 번 확인)
 export async function uploadProfilePhoto(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`${AUTH_BASE}/user/uploadPhoto`, {
+  const res = await fetch(join(AUTH_BASE, "/user/uploadPhoto"), {
     method: "POST",
     headers: { ...getAuthHeaders() }, // Content-Type 자동
     body: fd,
@@ -85,7 +84,6 @@ export async function uploadProfilePhoto(file) {
   if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
   return data; // { photoURL }
 }
-
 export async function getHomeInfo() {
   return getJSON("/home/home", { ...getAuthHeaders() });
 }
