@@ -213,7 +213,7 @@ function Body({ onSuccess }) {
       <button
         type="submit"
         disabled={!canSubmit || busy}
-        className="w-full h-11 rounded-xl bg-[#FABAE1] text-white hover:opacity-90 active:scale-95 disabled:opacity-60 transition"
+        className="w-full h-11 rounded-xl bg-[#FABAE1] text-white hover:opacity-90 active:scale-95 disabled:bg-gray-600 transition"
       >
         {busy ? "처리 중…" : mode === "login" ? "로그인" : "회원가입"}
       </button>
