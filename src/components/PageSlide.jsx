@@ -1,12 +1,11 @@
 import { motion } from "framer-motion";
 
-// 콘텐츠만 좌우 슬라이드. 스크롤처럼 '흘러가는' 느낌으로.
+// 콘텐츠만 좌우 슬라이드. 스크롤처럼 '흘러가는' 느낌 유지.
 export default function PageSlide({
   children,
-  dir = "right",     // "right": 오른쪽에서 들어와 왼쪽으로 밀림, "left"는 반대
-  duration = 0.20,   // 스크롤 느낌: 0.32 ~ 0.45 권장
+  dir = "right",   // "right": 오른쪽에서 들어옴, "left": 왼쪽에서 들어옴
+  duration = 0.20, // 스크롤 느낌
 }) {
-  // 퍼센트 단위로 화면 폭만큼 이동 → 스크롤처럼 보이게
   const xFrom = dir === "right" ? "100%" : "-100%";
   const xExit = dir === "right" ? "-100%" : "100%";
 
@@ -17,7 +16,7 @@ export default function PageSlide({
       exit={{ x: xExit }}
       transition={{
         type: "tween",
-        ease: "linear",   // 관성 없음, 일정 속도 → 스크롤 같은 느낌
+        ease: "linear",
         duration,
       }}
       className="w-full h-full will-change-transform transform-gpu overflow-hidden"

@@ -1,4 +1,3 @@
-// src/pages/Optional_Result.jsx
 import { useMemo } from "react";
 
 /* ---------- 유틸 ---------- */
@@ -35,29 +34,11 @@ const toCardFromString = (s, i, tag) => ({
 const toCardFromObj = (o, i, tag) => ({
   id: o.id ?? o._id ?? i,
   title:
-    o.title ??
-    o.name ??
-    o.place ??
-    o.course ??
-    o.heading ??
-    o.label ??
-    `추천 항목 ${i + 1}`,
+    o.title ?? o.name ?? o.place ?? o.course ?? o.heading ?? o.label ?? `추천 항목 ${i + 1}`,
   subtitle:
-    o.subtitle ??
-    o.address ??
-    o.location ??
-    o.zone ??
-    o.area ??
-    o.category ??
-    "",
+    o.subtitle ?? o.address ?? o.location ?? o.zone ?? o.area ?? o.category ?? "",
   description:
-    o.description ??
-    o.desc ??
-    o.summary ??
-    o.details ??
-    o.explain ??
-    o.text ??
-    "",
+    o.description ?? o.desc ?? o.summary ?? o.details ?? o.explain ?? o.text ?? "",
   image: o.image || o.image_url || o.img || o.thumbnail || "",
   link: o.url || o.link || o.href || "",
   tags: tag ? [tag] : o.tags || o.keywords || o.hashtags || [],
@@ -73,7 +54,7 @@ const deepCollectArrays = (obj) => {
     if (cur && typeof cur === "object" && !seen.has(cur)) {
       seen.add(cur);
       for (const [k, v] of Object.entries(cur)) {
-        if (k.startsWith("_")) continue; // 메타키(_sent 등) 무시
+        if (k.startsWith("_")) continue;
         if (Array.isArray(v) && v.length > 0) arrays.push([k, v]);
         else if (v && typeof v === "object") queue.push(v);
       }
@@ -98,7 +79,7 @@ function normalizeResults(input) {
   }
 
   if (result && typeof result === "object") {
-    const common = ["places", "results", "items", "data", "courses", "list", "entries", "suggestions", "options"];
+    const common = ["places","results","items","data","courses","list","entries","suggestions","options"];
     for (const key of common) {
       const v = result[key];
       if (Array.isArray(v) && v.length > 0) {

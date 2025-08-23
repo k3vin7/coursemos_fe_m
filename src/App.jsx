@@ -91,12 +91,18 @@ export default function App() {
   };
 
   const go = (next) => {
-    if (next === index || next < 0 || next > 6) return;
-    if (index === 1 && next === 0) setDir("left");       // Intro → AI
-    else if (index === 1 && next === 2) setDir("right"); // Intro → Date
-    else if (next > index) setDir("right");
-    else setDir("left");
-    setIndex(next);
+    setIndex((prev) => {
+      if (next === prev || next < 0 || next > 6) return prev;
+
+      // 방향은 "직전 prev" 기준으로 계산해야 뒤집히지 않음
+      setDir(next > prev ? "right" : "left");
+
+      // 결과 페이지로 '처음' 진입할 때만 추천 API 호출
+      if (next === 6 && prev !== 6) {
+        requestRecommendAndShow();
+      }
+      return next;
+    });
   };
 
   // 추천 실행
