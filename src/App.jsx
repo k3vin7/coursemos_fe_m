@@ -132,17 +132,16 @@ export default function App() {
       const useDate = date ?? now;
       const useHour = time?.hour ?? now.getHours();
       const useMinute = time?.minute ?? 0;
+      const lat = place?.lat ?? 37.5665;
+      const lng = place?.lng ?? 126.9780;
+      const addr = (place?.address || "").trim();
+      const locationStr = addr ? addr : `${lat},${lng}`;
       const payload = {
         date: useDate.toISOString().slice(0, 10),
         time: `${String(useHour).padStart(2, "0")}:${String(useMinute).padStart(2, "0")}`,
-        location: {
-          lat: place?.lat ?? 37.5665,
-          lng: place?.lng ?? 126.9780,
-          address: place?.address || "서울특별시 중구 세종대로 110",
-        },
-        // 서버가 'etc' 대신 'note'를 요구하면 아래 키만 note로 바꿔주세요.
-        etc: etc || "",
-       };
+        location: locationStr,        // ★ 객체 → 문자열
+        etc: (etc || "").trim(),      // 서버가 'note'를 요구한다면 등호 오른쪽 키만 note로 바꿔도 됨
+      };
       const data = await postRecommend(payload);
       setResult(data);
     } catch (e) {
