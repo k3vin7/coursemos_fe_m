@@ -26,8 +26,8 @@ export default function Intro({
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   const reset = () => {
-    setRRight(28);
-    setRLeft(28);
+    setRRight(0);
+    setRLeft(0);
     setHitRight(false);
     setHitLeft(false);
   };
