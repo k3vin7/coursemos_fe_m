@@ -1,5 +1,5 @@
 // src/api/auth.js
-const AUTH_BASE = (import.meta.env.VITE_AUTH_BASE_URL || "").replace(/\/$/, "");
+const AUTH_BASE = (import.meta.env.VITE_AUTH_BASE_URL || "/api").replace(/\/$/, "");
 
 const TOKEN_KEY  = "AUTH_TOKEN";
 const USER_KEY   = "AUTH_USER";
@@ -52,32 +52,30 @@ async function getJSON(path, headers = {}) {
   return data;
 }
 
-// === 명세 반영 ===
-// 회원가입: POST /api/user/signIn
+// ✅ 여기서부터 path에 'api' 넣지 마세요. (베이스가 이미 /api)
 export async function signup({
   email,
   password,
   name,
-  birthday,          // "YYYY-MM-DD"
-  partnerBirthday,    // "YYYY-MM-DD"
-  startDate,          // "YYYY-MM-DD"
-  profilePhoto,       // URL (UI에서는 안 받지만, 필요 시 전달 가능)
+  birthday,          // YYYY-MM-DD (optional)
+  partnerBirthday,   // YYYY-MM-DD (optional)
+  startDate,         // YYYY-MM-DD (optional)
+  profilePhoto,      // URL (optional)
 }) {
-  return postJSON("/api/user/signIn", {
+  return postJSON("/user/signIn", {
     email, password, name, birthday, partnerBirthday, startDate, profilePhoto,
   });
 }
 
-// 로그인: POST /api/user/login
 export async function login({ email, password }) {
-  return postJSON("/api/user/login", { email, password });
+  return postJSON("/user/login", { email, password });
 }
 
-// 프로필 사진 업로드: POST /api/user/upload/user/uploadPhoto (multipart, field: file)
+// 필요 시 사용(엔드포인트는 서버 명세에 맞게 한 번 확인)
 export async function uploadProfilePhoto(file) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`${AUTH_BASE}/api/user/upload/user/uploadPhoto`, {
+  const res = await fetch(`${AUTH_BASE}/user/uploadPhoto`, {
     method: "POST",
     headers: { ...getAuthHeaders() }, // Content-Type 자동
     body: fd,
@@ -88,7 +86,6 @@ export async function uploadProfilePhoto(file) {
   return data; // { photoURL }
 }
 
-// 홈 정보 조회: GET /api/home/home
 export async function getHomeInfo() {
-  return getJSON("/api/home/home", { ...getAuthHeaders() });
+  return getJSON("/home/home", { ...getAuthHeaders() });
 }
