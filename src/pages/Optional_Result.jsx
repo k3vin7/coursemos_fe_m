@@ -3,13 +3,13 @@ import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 /* ---------- 유틸 ---------- */
+const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
 const tryParseJSON = (v) => {
   if (typeof v !== "string") return null;
   const s = v.trim();
   if (!s.startsWith("{") && !s.startsWith("[")) return null;
   try { return JSON.parse(s); } catch { return null; }
 };
-
 const splitBullets = (v) => {
   if (typeof v !== "string") return [];
   const lines = v
@@ -18,9 +18,19 @@ const splitBullets = (v) => {
     .filter((x) => x.length > 0);
   return lines.length >= 2 ? lines : [];
 };
-
 const truncate = (s, n = 160) =>
   !s ? "" : s.length > n ? s.slice(0, n - 1) + "…" : s;
+
+const minutesToLabel = (min) => {
+  if (!isNonEmpty(min)) return "";
+  const num = Number(min);
+  if (Number.isNaN(num)) return "";
+  const h = Math.floor(num / 60);
+  const m = num % 60;
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+  if (h > 0) return `${h}시간`;
+  return `${m}분`;
+};
 
 const deepCollectArrays = (obj) => {
   const arrays = [];
@@ -31,7 +41,7 @@ const deepCollectArrays = (obj) => {
     if (cur && typeof cur === "object" && !seen.has(cur)) {
       seen.add(cur);
       for (const [k, v] of Object.entries(cur)) {
-        if (k.startsWith("_")) continue;
+        if (k.startsWith("_")) continue; // 메타키 무시
         if (Array.isArray(v) && v.length > 0) arrays.push([k, v]);
         else if (v && typeof v === "object") queue.push(v);
       }
@@ -40,16 +50,72 @@ const deepCollectArrays = (obj) => {
   return arrays;
 };
 
-const minutesToLabel = (min) => {
-  if (!min && min !== 0) return "";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
-  if (h > 0) return `${h}시간`;
-  return `${m}분`;
+/* ---------- 키 매핑 & 정규화 ---------- */
+// 다국어/다형 스키마 지원을 위한 안전한 getter
+const getAny = (o, keys = []) => {
+  for (const k of keys) {
+    if (k in o && isNonEmpty(o[k])) return o[k];
+  }
+  return undefined;
 };
 
-/* ---------- 기존 카드 정규화(백업용) ---------- */
+// 장소(스톱) 정규화
+function normalizeStop(stopRaw = {}) {
+  const name = getAny(stopRaw, ["name", "장소명", "place", "title", "label"]);
+  const desc = getAny(stopRaw, ["desc", "description", "설명", "summary", "explain", "text"]);
+  const category = getAny(stopRaw, ["category", "카테고리", "type"]);
+  const suggested_time_of_day = getAny(stopRaw, ["suggested_time_of_day", "권장시간대", "time_of_day"]);
+  const photo_url = getAny(stopRaw, ["photo_url", "image_url", "image", "img", "thumbnail"]);
+  const durationLike = getAny(stopRaw, [
+    "typical_duration_min",
+    "duration_min",
+    "권장체류시간",
+    "stay_minutes",
+    "duration",
+  ]);
+  const typical_duration_min = isNonEmpty(durationLike) ? Number(durationLike) : undefined;
+
+  return {
+    name: isNonEmpty(name) ? String(name) : "",
+    desc: isNonEmpty(desc) ? String(desc) : "",
+    category: isNonEmpty(category) ? String(category) : "",
+    suggested_time_of_day: isNonEmpty(suggested_time_of_day) ? String(suggested_time_of_day) : "",
+    photo_url: isNonEmpty(photo_url) ? String(photo_url) : "",
+    typical_duration_min: Number.isFinite(typical_duration_min) ? typical_duration_min : undefined,
+    _original: stopRaw, // ← 추가 정보 표시용으로 원본 보관
+  };
+}
+
+// 코스 정규화
+function normalizeCourse(courseRaw = {}, idx = 0) {
+  // stops / 스톱
+  const stopsArr =
+    getAny(courseRaw, ["stops", "스톱", "Stops"]) ||
+    getAny(courseRaw, ["스탑"]) || // 혹시 다른 표기
+    [];
+
+  const stops = Array.isArray(stopsArr) ? stopsArr.map((s) => normalizeStop(s)) : [];
+
+  // 총 시간
+  const minutesLike =
+    getAny(courseRaw, ["total_estimated_minutes", "총예상소요시간", "duration_min"]) ??
+    (stops.some((s) => isNonEmpty(s.typical_duration_min))
+      ? stops.reduce((acc, s) => acc + (s.typical_duration_min || 0), 0)
+      : undefined);
+
+  // 타이틀
+  const title = getAny(courseRaw, ["title", "name", "코스명", "course", "label"]) || `코스 ${idx + 1}`;
+
+  return {
+    id: getAny(courseRaw, ["id", "_id"]) ?? `course-${idx}`,
+    title: String(title),
+    total_estimated_minutes: Number.isFinite(Number(minutesLike)) ? Number(minutesLike) : undefined,
+    stops,
+    _original: courseRaw, // 원본 보관
+  };
+}
+
+/* ---------- 카드/섹션 생성 ---------- */
 const toCardFromString = (s, i, tag) => ({
   id: `${tag || "item"}-${i}`,
   title: `추천 항목 ${i + 1}`,
@@ -64,35 +130,100 @@ const toCardFromString = (s, i, tag) => ({
 const toCardFromObj = (o, i, tag) => ({
   id: o.id ?? o._id ?? i,
   title:
-    o.title ??
-    o.name ??
-    o.place ??
-    o.course ??
-    o.heading ??
-    o.label ??
-    `추천 항목 ${i + 1}`,
+    o.title ?? o.name ?? o.place ?? o.course ?? o.heading ?? o.label ?? `추천 항목 ${i + 1}`,
   subtitle:
-    o.subtitle ??
-    o.address ??
-    o.location ??
-    o.zone ??
-    o.area ??
-    o.category ??
-    "",
+    o.subtitle ?? o.address ?? o.location ?? o.zone ?? o.area ?? o.category ?? "",
   description:
-    o.description ??
-    o.desc ??
-    o.summary ??
-    o.details ??
-    o.explain ??
-    o.text ??
-    "",
+    o.description ?? o.desc ?? o.summary ?? o.details ?? o.explain ?? o.text ?? "",
   image: o.image || o.image_url || o.img || o.thumbnail || "",
   link: o.url || o.link || o.href || "",
   tags: o.tags || o.keywords || o.hashtags || (tag ? [tag] : []),
   raw: o,
 });
 
+// 코스 → 카드
+const toCourseCard = (normCourse, i, groupTag = "courses") => {
+  const firstImg = normCourse.stops.find((s) => s.photo_url)?.photo_url || "";
+  const names = normCourse.stops.map((s) => s.name).filter(Boolean);
+  const cats = Array.from(new Set(normCourse.stops.map((s) => s.category).filter(Boolean)));
+  const tods = Array.from(
+    new Set(normCourse.stops.map((s) => s.suggested_time_of_day).filter(Boolean))
+  );
+
+  return {
+    id: normCourse.id ?? `${groupTag}-${i}`,
+    title: normCourse.title ?? `코스 ${i + 1}`,
+    subtitle: [
+      normCourse.total_estimated_minutes ? minutesToLabel(normCourse.total_estimated_minutes) : "",
+      `${normCourse.stops.length}곳`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    description: names.slice(0, 6).join(" → "),
+    image: firstImg,
+    link: "",
+    tags: [...cats.slice(0, 3), ...tods.slice(0, 2)],
+    raw: normCourse, // ← 모달에서 바로 사용
+  };
+};
+
+// 입력에서 코스 그룹 추출
+function extractCourseGroups(input) {
+  // 반환: [{ title, cards }, ...]
+  let data = input;
+  const parsed = tryParseJSON(data);
+  if (parsed) data = parsed;
+
+  const groups = [];
+
+  // 배열이 곧 코스 리스트인지?
+  const isCourseArray = (arr) =>
+    Array.isArray(arr) && arr.length > 0 && arr.every((c) => {
+      const s = getAny(c || {}, ["stops", "스톱", "Stops", "스탑"]);
+      return Array.isArray(s);
+    });
+
+  if (Array.isArray(data) && isCourseArray(data)) {
+    const cards = data.map((c, i) => toCourseCard(normalizeCourse(c, i), i, "courses"));
+    groups.push({ title: "코스", cards });
+    return groups;
+  }
+
+  if (data && typeof data === "object") {
+    // 우선순위: top-level "courses"
+    if (isCourseArray(data.courses)) {
+      const cards = data.courses.map((c, i) =>
+        toCourseCard(normalizeCourse(c, i), i, "courses")
+      );
+      groups.push({ title: "코스", cards });
+    }
+
+    // 기타 키들 중 코스 배열
+    for (const [key, arr] of Object.entries(data)) {
+      if (key === "courses") continue;
+      if (isCourseArray(arr)) {
+        const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, key));
+        groups.push({ title: key, cards });
+      }
+    }
+
+    // 중첩 탐색(첫 배열만)
+    if (groups.length === 0) {
+      const arrays = deepCollectArrays(data);
+      for (const [tag, arr] of arrays) {
+        if (isCourseArray(arr)) {
+          const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, tag));
+          groups.push({ title: tag, cards });
+          break;
+        }
+      }
+    }
+  }
+
+  return groups;
+}
+
+/* ---------- 범용(백업) 카드 ---------- */
 function normalizeGeneric(input) {
   let result = input;
   const parsed = tryParseJSON(result);
@@ -144,86 +275,28 @@ function normalizeGeneric(input) {
   return [];
 }
 
-/* ---------- 코스 전용 파서 ---------- */
-const toCourseCard = (course, i, groupTag = "courses") => {
-  const stops = Array.isArray(course?.stops) ? course.stops : [];
-  const firstImg = stops.find((s) => s?.photo_url)?.photo_url || "";
-  const names = stops.map((s) => s?.name).filter(Boolean);
-  const cats = Array.from(new Set(stops.map((s) => s?.category).filter(Boolean)));
-  const tods = Array.from(new Set(stops.map((s) => s?.suggested_time_of_day).filter(Boolean)));
-
-  return {
-    id: course.id ?? course._id ?? `${groupTag}-${i}`,
-    title: course.title ?? `코스 ${i + 1}`,
-    subtitle: `${minutesToLabel(course.total_estimated_minutes ?? 0)} · ${stops.length}곳`,
-    description: names.slice(0, 6).join(" → "), // 코스 흐름 요약
-    image: firstImg,
-    link: "", // 필요시 코스 공유 링크 등 매핑
-    tags: [...cats.slice(0, 3), ...tods.slice(0, 2)],
-    raw: course,
-  };
-};
-
-function extractCourseGroups(input) {
-  // 반환: [{ title: "courses", cards: [...] }, ...]
-  let data = input;
-  const parsed = tryParseJSON(data);
-  if (parsed) data = parsed;
-
-  const groups = [];
-
-  if (Array.isArray(data)) {
-    // 배열이 곧 코스 리스트인지 판단(요소에 stops 배열이 있으면 코스)
-    if (data.every((c) => Array.isArray(c?.stops))) {
-      groups.push({
-        title: "코스",
-        cards: data.map((c, i) => toCourseCard(c, i, "courses")),
-      });
-      return groups;
-    }
-    return groups;
-  }
-
-  if (data && typeof data === "object") {
-    // 1) 우선순위: top-level "courses"
-    if (Array.isArray(data.courses) && data.courses.length > 0) {
-      const arr = data.courses.filter((c) => Array.isArray(c?.stops));
-      if (arr.length) {
-        groups.push({
-          title: "코스",
-          cards: arr.map((c, i) => toCourseCard(c, i, "courses")),
-        });
-      }
-    }
-    // 2) 그 외 키들 중 'stops'를 가진 코스 배열을 추가 섹션으로
-    for (const [key, arr] of Object.entries(data)) {
-      if (key === "courses") continue;
-      if (Array.isArray(arr) && arr.length > 0 && arr.every((c) => Array.isArray(c?.stops))) {
-        groups.push({
-          title: key,
-          cards: arr.map((c, i) => toCourseCard(c, i, key)),
-        });
-      }
-    }
-    // 3) 중첩 객체 안에 있는 코스 배열도 찾아서 하나만 더(필요시 확장)
-    if (groups.length === 0) {
-      const arrays = deepCollectArrays(data);
-      for (const [tag, arr] of arrays) {
-        if (arr.every((c) => Array.isArray(c?.stops))) {
-          groups.push({
-            title: tag,
-            cards: arr.map((c, i) => toCourseCard(c, i, tag)),
-          });
-          break;
-        }
-      }
-    }
-  }
-
-  return groups;
+/* ---------- 상세 모달 ---------- */
+function KeyValueList({ obj, omit = [] }) {
+  if (!obj || typeof obj !== "object") return null;
+  const entries = Object.entries(obj).filter(([k, v]) => !omit.includes(k) && isNonEmpty(v));
+  if (!entries.length) return null;
+  return (
+    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+      {entries.map(([k, v]) => (
+        <FragmentKV key={k} k={k} v={v} />
+      ))}
+    </dl>
+  );
+}
+function FragmentKV({ k, v }) {
+  return (
+    <>
+      <dt className="text-gray-500">{k}</dt>
+      <dd className="text-gray-800 break-words whitespace-pre-wrap">{String(v)}</dd>
+    </>
+  );
 }
 
-/* ---------- 상세 모달 ---------- */
 function CourseDetailModal({ open, course, onClose }) {
   useEffect(() => {
     if (!open) return;
@@ -234,7 +307,9 @@ function CourseDetailModal({ open, course, onClose }) {
 
   if (!open || !course) return null;
 
-  const stops = Array.isArray(course.raw?.stops) ? course.raw.stops : [];
+  const norm = course.raw;              // 정규화된 코스
+  const stops = Array.isArray(norm?.stops) ? norm.stops : [];
+  const courseExtra = norm?._original || {};
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -257,19 +332,25 @@ function CourseDetailModal({ open, course, onClose }) {
             ) : null}
           </div>
 
-          {/* 대표 이미지 */}
-          {course.image ? (
-            <img
-              src={course.image}
-              alt={course.title}
-              className="w-full h-56 object-cover"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
+          {/* 본문 */}
+          <div className="p-5 space-y-8">
+            {/* 코스-level 추가 정보(들어온 원본 전부 표시) */}
+            <section>
+              <h3 className="text-base font-semibold mb-2">코스 정보</h3>
+              <div className="text-sm text-gray-700">
+                {isNonEmpty(norm?.total_estimated_minutes) && (
+                  <div className="mb-1">
+                    총 예상 소요: <b>{minutesToLabel(norm.total_estimated_minutes)}</b>
+                  </div>
+                )}
+                <KeyValueList
+                  obj={courseExtra}
+                  omit={["스톱", "stops", "Stops"]}
+                />
+              </div>
+            </section>
 
-          {/* 본문: 코스 구성 */}
-          <div className="p-5 space-y-6">
+            {/* 코스 구성 */}
             {stops.length > 0 && (
               <section>
                 <h3 className="text-base font-semibold mb-3">코스 구성</h3>
@@ -296,13 +377,14 @@ function CourseDetailModal({ open, course, onClose }) {
                             <h4 className="font-medium text-gray-800 truncate">
                               {s.name || `스탑 ${i + 1}`}
                             </h4>
-                            {s.typical_duration_min ? (
+                            {isNonEmpty(s.typical_duration_min) && (
                               <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
                                 {minutesToLabel(s.typical_duration_min)}
                               </span>
-                            ) : null}
+                            )}
                           </div>
-                          {s.category || s.suggested_time_of_day ? (
+
+                          {(s.category || s.suggested_time_of_day) && (
                             <div className="flex gap-1.5 mt-1">
                               {s.category && (
                                 <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 border">
@@ -315,12 +397,26 @@ function CourseDetailModal({ open, course, onClose }) {
                                 </span>
                               )}
                             </div>
-                          ) : null}
-                          {s.desc ? (
+                          )}
+
+                          {s.desc && (
                             <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">
                               {s.desc}
                             </p>
-                          ) : null}
+                          )}
+
+                          {/* 원본의 나머지 모든 필드 표시 */}
+                          <KeyValueList
+                            obj={s._original}
+                            omit={[
+                              "photo_url", "image_url", "image", "img", "thumbnail",
+                              "장소명", "name", "place", "title", "label",
+                              "설명", "desc", "description", "summary", "explain", "text",
+                              "권장체류시간", "typical_duration_min", "duration_min", "stay_minutes", "duration",
+                              "카테고리", "category", "type",
+                              "권장시간대", "suggested_time_of_day", "time_of_day",
+                            ]}
+                          />
                         </div>
                       </div>
                     </li>
@@ -349,7 +445,6 @@ export default function Optional_Result({
   const { courseGroups, fallbackCards } = useMemo(() => {
     const groups = extractCourseGroups(result);
     if (groups.length > 0) return { courseGroups: groups, fallbackCards: [] };
-    // 코스가 하나도 없다면 기존 방식으로라도 보여주기
     return { courseGroups: [], fallbackCards: normalizeGeneric(result) };
   }, [result]);
 
@@ -384,7 +479,7 @@ export default function Optional_Result({
           </div>
         )}
 
-        {/* 코스가 있을 때: 섹션별 렌더 */}
+        {/* 코스 섹션 */}
         {!loading && !error && courseGroups.length > 0 && (
           <div className="space-y-8">
             {courseGroups.map((g, gi) => (
@@ -452,7 +547,7 @@ export default function Optional_Result({
           </div>
         )}
 
-        {/* 코스가 없을 때: 기존 카드 렌더 */}
+        {/* 코스가 없을 때: 범용 카드 */}
         {!loading && !error && courseGroups.length === 0 && fallbackCards.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {fallbackCards.map((c, i) => (

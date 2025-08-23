@@ -1,95 +1,128 @@
-// src/components/ProgressDock.jsx
 import { createPortal } from "react-dom";
 
 export default function ProgressDock({
-  current = 1,               // 1=date, 2=time, 3=place, 4=etc
+  current = 1,                 // 1=date, 2=time, 3=place, 4=etc
   className = "",
-  stroke = "#FF8DB5",        // 외곽선 색
-  strokeWidth = 5,
+  stroke = "#FFA3C4",
+  strokeWidth = 8,
+  topOffset = "15vh",          // 진행 바 세로 위치
+  animMs = 500,                // 그려지는 시간(ms)
 }) {
-  // 레이아웃 (반응형 스케일: viewBox 기준으로 그리고 width:100%)
-  // [왼쪽 선분] 20~100  | [하트] 90~210 | [오른쪽 선분] 210~280
-  const y = 64;
-  const left = { x1: 20, x2: 100, y };
-  const right = { x1: 210, x2: 280, y };
+  // 좌표/형상 ------------------------------------------------------------
+  const VB_W = 300, VB_H = 160;
+  const BASE_Y = 110;          // 선분/하트 바닥 y(둘이 만나는 기준선)
+  const PADDING_X = 20;
 
-  // 현재 단계까지 누적 표시
+  // 하트 아랫부분이 "살짝 벌어진" 느낌을 위해 중앙에서 footGap만큼 좌우로 띄움
+  const footGap = 28;          // ← 숫자 키우면 벌어짐 증가
+  const footL = { x: 150 - footGap, y: BASE_Y };
+  const footR = { x: 150 + footGap, y: BASE_Y };
+
+  // 하트 상단 골 위치(위로 갈수록 값 감소). 더 위로 올리고 싶으면 줄이면 됨.
+  const tipY = 44;
+
+  // 부드러운 곡률용 컨트롤 포인트(좌우 대칭)
+  // - 첫 곡선은 바닥에서 살짝 옆/위로 빠져나오고,
+  // - 두 번째 곡선이 상단 골로 자연스럽게 연결되도록 잡음.
+  const PATH_HEART_L = [
+    `M ${footL.x},${footL.y}`,
+    `C ${footL.x - 18},${BASE_Y - 10}  ${footL.x - 30},${BASE_Y - 44}  ${150 - 22},${(tipY + BASE_Y) / 2}`,
+    `C ${150 - 14},${tipY + 8}  ${150 - 8},${tipY + 2}  150,${tipY}`,
+  ].join(" ");
+
+  const PATH_HEART_R = [
+    `M ${footR.x},${footR.y}`,
+    `C ${footR.x + 18},${BASE_Y - 10}  ${footR.x + 30},${BASE_Y - 44}  ${150 + 22},${(tipY + BASE_Y) / 2}`,
+    `C ${150 + 14},${tipY + 8}  ${150 + 8},${tipY + 2}  150,${tipY}`,
+  ].join(" ");
+
+  const LEFT_LINE_D  = `M ${PADDING_X},${BASE_Y} L ${footL.x},${BASE_Y}`;
+  const RIGHT_LINE_D = `M ${footR.x},${BASE_Y} L ${VB_W - PADDING_X},${BASE_Y}`;
+
+  // 누적 노출 -----------------------------------------------------------
   const showLeftLine  = current >= 1;
   const showHeartL    = current >= 2;
   const showHeartR    = current >= 3;
   const showRightLine = current >= 4;
 
+  // 이번에 "방금 켜진" 세그먼트만 그려지는 애니메이션 적용
+  const animLeftLine  = current === 1;
+  const animHeartL    = current === 2;
+  const animHeartR    = current === 3;
+  const animRightLine = current === 4;
+
+  // 공통 스타일: pathLength=100 기준으로 dash 애니
+  const segStyle = {
+    vectorEffect: "non-scaling-stroke",
+    stroke,
+    strokeWidth,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    fill: "none",
+    pathLength: 100,
+    strokeDasharray: 100,
+  };
+  const animClass = "animate-draw";
+
   return createPortal(
     <div
-      className={`pointer-events-none fixed top-0 left-0 right-0 z-[50] ${className}`}
-      style={{ padding: "12px 16px" }}
+      className={`pointer-events-none fixed left-0 right-0 z-[50] ${className}`}
+      style={{ top: topOffset, padding: "0 16px" }}
       aria-hidden
     >
+      {/* 그려지는 애니메이션 키프레임 */}
+      <style>{`
+        @keyframes draw {
+          from { stroke-dashoffset: 100; }
+          to   { stroke-dashoffset: 0; }
+        }
+        .${animClass} { animation: draw ${animMs}ms ease-out forwards; }
+      `}</style>
+
       <div className="mx-auto max-w-[720px]">
         <svg
-          viewBox="0 0 300 128"
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
           width="100%"
-          height="72"
+          height="96"
           preserveAspectRatio="none"
         >
-          <defs>
-            {/* 부드러운 하트 패스 (센터 x=150) */}
-            <path id="heartPath"
-              d="
-                M150,76
-                C150,52 136,38 119,38
-                C101,38 92,50 92,63
-                C92,82 114,94 150,112
-                C186,94 208,82 208,63
-                C208,50 199,38 181,38
-                C164,38 150,52 150,76 Z
-              " />
-            {/* 하트 반쪽 클립 */}
-            <clipPath id="clipLeft"><rect x="90"  y="0" width="60" height="128"/></clipPath>
-            <clipPath id="clipRight"><rect x="150" y="0" width="60" height="128"/></clipPath>
-          </defs>
-
-          {/* 1단계: 왼쪽 선분 */}
+          {/* 1) 왼쪽 선분 */}
           {showLeftLine && (
-            <line
-              x1={left.x1} y1={left.y}
-              x2={left.x2} y2={left.y}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
+            <path
+              key={`L-${current}`}                 // 단계 바뀔 때 재마운트 → 애니 보장
+              d={LEFT_LINE_D}
+              style={{ ...segStyle, strokeDashoffset: animLeftLine ? 100 : 0 }}
+              className={animLeftLine ? animClass : ""}
             />
           )}
 
-          {/* 2단계: 하트 왼쪽 반쪽 */}
+          {/* 2) 왼쪽 하트 반쪽 */}
           {showHeartL && (
-            <use
-              href="#heartPath"
-              clipPath="url(#clipLeft)"
-              fill="none"
-              stroke={stroke}
-              strokeWidth={strokeWidth}
+            <path
+              key={`HL-${current}`}
+              d={PATH_HEART_L}
+              style={{ ...segStyle, strokeDashoffset: animHeartL ? 100 : 0 }}
+              className={animHeartL ? animClass : ""}
             />
           )}
 
-          {/* 3단계: 하트 오른쪽 반쪽 */}
+          {/* 3) 오른쪽 하트 반쪽 */}
           {showHeartR && (
-            <use
-              href="#heartPath"
-              clipPath="url(#clipRight)"
-              fill="none"
-              stroke={stroke}
-              strokeWidth={strokeWidth}
+            <path
+              key={`HR-${current}`}
+              d={PATH_HEART_R}
+              style={{ ...segStyle, strokeDashoffset: animHeartR ? 100 : 0 }}
+              className={animHeartR ? animClass : ""}
             />
           )}
 
-          {/* 4단계: 오른쪽 선분 */}
+          {/* 4) 오른쪽 선분 */}
           {showRightLine && (
-            <line
-              x1={right.x1} y1={right.y}
-              x2={right.x2} y2={right.y}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
+            <path
+              key={`R-${current}`}
+              d={RIGHT_LINE_D}
+              style={{ ...segStyle, strokeDashoffset: animRightLine ? 100 : 0 }}
+              className={animRightLine ? animClass : ""}
             />
           )}
         </svg>
