@@ -1,6 +1,7 @@
+// src/components/AuthModal.jsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { login, signup, saveAuth, getHomeInfo, saveUser, getUser } from "../api/auth";
+import { login, signup, saveAuth, saveUser, getUser } from "../api/auth";
 
 export default function AuthModal({ open, onSuccess, onSkip }) {
   useEffect(() => {
@@ -49,16 +50,31 @@ function Body({ onSuccess }) {
 
   const canSubmit = mode === "login" ? email && pw : name && email && pw;
 
-  async function fetchAndStoreProfileSafe() {
-    try {
-      const me = await getHomeInfo();   // 서버 프로필(있으면)
-      if (me) {
-        // 서버 응답으로 최종 동기화
-        saveUser({ ...(getUser() || {}), ...me });
-      }
-    } catch {
-      // 404 등 → 무시 (로컬 값으로 이미 표시 가능)
+  const normalizeEmail = (v) => String(v || "").trim().toLowerCase();
+  const clean = () => ({
+    email: normalizeEmail(email),
+    password: String(pw || "").trim(),
+    name: String(name || "").trim(),
+    birthday: birthday || "",
+    partnerBirthday: partnerBirthday || "",
+    startDate: startDate || "",
+  });
+
+  async function autoLogin(email, password) {
+    // 가입 응답에 token이 없을 때만 호출
+    const data = await login({ email, password });
+    saveAuth({
+      token: data?.token,
+      refreshToken: data?.refreshToken,
+      expiresIn: Number(data?.expiresIn),
+      user: data?.user || null,
+    });
+    // 응답에 user가 없으면 최소 이메일은 보장
+    if (!data?.user) {
+      const prev = getUser() || {};
+      saveUser({ ...prev, email });
     }
+    return data;
   }
 
   async function handleSubmit(e) {
@@ -67,51 +83,51 @@ function Body({ onSuccess }) {
     setBusy(true);
     setErr("");
 
+    const { email: em, password: pwc, name: nm } = clean();
     try {
       if (mode === "login") {
-        const data = await login({ email, password: pw });
-
-        // 토큰 저장
+        const data = await login({ email: em, password: pwc });
         saveAuth({
           token: data?.token,
           refreshToken: data?.refreshToken,
           expiresIn: Number(data?.expiresIn),
           user: data?.user || null,
         });
-
-        // 응답에 user가 없더라도 최소한 폼의 email은 저장 (마이페이지 즉시 표기용)
         if (!data?.user) {
           const prev = getUser() || {};
-          saveUser({ ...prev, email });
+          saveUser({ ...prev, email: em });
         }
-
-        // 서버 프로필 있으면 병합 반영
-        await fetchAndStoreProfileSafe();
         onSuccess?.({ token: data?.token, user: data?.user });
       } else {
+        // 회원가입
         const payload = {
-          email,
-          password: pw,
-          name,
-          ...(birthday ? { birthday } : {}),
-          ...(partnerBirthday ? { partnerBirthday } : {}),
-          ...(startDate ? { startDate } : {}),
+          email: em,
+          password: pwc,
+          name: nm,
+          ...(birthday && { birthday }),
+          ...(partnerBirthday && { partnerBirthday }),
+          ...(startDate && { startDate }),
         };
         const data = await signup(payload);
 
-        // 토큰 & (있다면) 서버 user 저장
-        saveAuth({ token: data?.token, user: data?.user || null });
-
-        // 서버 user가 없을 수도 있으니 폼 값으로 로컬 선저장
-        const baseLocal = { email, name, birthday, partnerBirthday, startDate };
-        saveUser({ ...(getUser() || {}), ...baseLocal });
-
-        // 서버 프로필 있으면 병합 반영
-        await fetchAndStoreProfileSafe();
-        onSuccess?.({ token: data?.token, user: data?.user });
+        // 1) 가입 응답에 token이 있으면 그대로 로그인 처리
+        if (data?.token) {
+          saveAuth({ token: data.token, user: data?.user || null });
+          // 로컬에도 최소한 폼 값 반영
+          const baseLocal = { email: em, name: nm, birthday, partnerBirthday, startDate };
+          saveUser({ ...(getUser() || {}), ...baseLocal });
+        } else {
+          // 2) token이 없으면 같은 자격증명으로 자동 로그인 1회
+          await autoLogin(em, pwc);
+          // 폼 값도 저장(마이페이지 즉시 표시)
+          const baseLocal = { email: em, name: nm, birthday, partnerBirthday, startDate };
+          saveUser({ ...(getUser() || {}), ...baseLocal });
+        }
+        onSuccess?.({ ok: true });
       }
     } catch (e) {
-      setErr(e.message || "요청 실패");
+      // 서버 메시지 최대한 노출
+      setErr(e?.message || "요청 실패");
     } finally {
       setBusy(false);
     }
@@ -218,14 +234,18 @@ function Tabs({ value, onChange }) {
       <button
         type="button"
         onClick={() => onChange("login")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${value === "login" ? "bg-white shadow border" : "text-gray-600"}`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${
+          value === "login" ? "bg-white shadow border" : "text-gray-600"
+        }`}
       >
         로그인
       </button>
       <button
         type="button"
         onClick={() => onChange("signup")}
-        className={`h-9 rounded-lg text-sm font-medium transition ${value === "signup" ? "bg-white shadow border" : "text-gray-600"}`}
+        className={`h-9 rounded-lg text-sm font-medium transition ${
+          value === "signup" ? "bg-white shadow border" : "text-gray-600"
+        }`}
       >
         회원가입
       </button>
