@@ -150,20 +150,6 @@ export default function Optional_Result({
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">추천 결과</h1>
-          <div className="flex gap-2 flex-wrap justify-end">
-            <button
-              className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 active:scale-95"
-              onClick={onPrev}
-            >
-              ← 수정하기
-            </button>
-            <button
-              className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:brightness-95 active:scale-95"
-              onClick={onDone}
-            >
-              완료
-            </button>
-          </div>
         </div>
 
         {loading && (
@@ -247,20 +233,6 @@ export default function Optional_Result({
                         자세히 보기
                       </a>
                     ) : null}
-                    <button
-                      onClick={() =>
-                        navigator.clipboard
-                          .writeText(
-                            typeof c.raw === "string"
-                              ? c.raw
-                              : JSON.stringify(c.raw, null, 2)
-                          )
-                          .catch(() => {})
-                      }
-                      className="px-3 h-9 rounded-lg bg-gray-100 border border-gray-200 text-sm hover:bg-gray-200 active:scale-95"
-                    >
-                      내용 복사
-                    </button>
                   </div>
                 </div>
               </article>
