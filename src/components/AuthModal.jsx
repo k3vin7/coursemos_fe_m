@@ -36,7 +36,6 @@ function Header() {
   return (
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-xl font-bold">로그인</h3>
-      <span className="text-xs text-gray-400">튜토리얼은 로그인 후 1회 표시</span>
     </div>
   );
 }
@@ -185,7 +184,7 @@ function Body({ onSuccess }) {
             />
           </label>
           <label className="text-xs text-gray-500">
-            파트너 생일
+            애인 생일
             <input
               type="date"
               value={partnerBirthday}
@@ -194,7 +193,7 @@ function Body({ onSuccess }) {
             />
           </label>
           <label className="text-xs text-gray-500">
-            기념일(시작일)
+            1일
             <input
               type="date"
               value={startDate}
@@ -214,7 +213,7 @@ function Body({ onSuccess }) {
       <button
         type="submit"
         disabled={!canSubmit || busy}
-        className="w-full h-11 rounded-xl bg-black text-white hover:opacity-90 active:scale-95 disabled:opacity-60 transition"
+        className="w-full h-11 rounded-xl bg-[#FABAE1] text-white hover:opacity-90 active:scale-95 disabled:opacity-60 transition"
       >
         {busy ? "처리 중…" : mode === "login" ? "로그인" : "회원가입"}
       </button>
@@ -224,7 +223,7 @@ function Body({ onSuccess }) {
         <button
           type="button"
           onClick={() => { setErr(""); setMode(mode === "login" ? "signup" : "login"); }}
-          className="underline underline-offset-2 text-indigo-600"
+          className="underline underline-offset-2 text-[#ADC3FF]"
         >
           {mode === "login" ? "회원가입" : "로그인"}
         </button>
@@ -262,7 +261,7 @@ function Footer({ onSkip }) {
         onClick={onSkip}
         className="text-sm text-gray-500 hover:text-gray-700 underline underline-offset-2"
       >
-        그냥 둘러볼게요
+        그냥 둘러볼게요!
       </button>
     </div>
   );
