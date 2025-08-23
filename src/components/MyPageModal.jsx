@@ -123,7 +123,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
             onClick={onClose}
             className="px-3 h-9 text-gray-600"
           >
-            x
+            ×
           </button>
         </div>
 
