@@ -7,10 +7,10 @@ export default function ProgressDock({
   current = 1,
   className = "",
   stroke = "#FF8DB5",
-  strokeWidth = 10,
+  strokeWidth = 8,
   topOffset = "10vh",
-  heartScaleY = 4,
-  dockHeight = 200,
+  heartScaleY = 3,
+  dockHeight = 300,
   animMs = 800,
   gapRadius = 0,
   gapColor = "#fff",
@@ -35,9 +35,9 @@ export default function ProgressDock({
   const showHeartR    = current >= 3;
   const showRightLine = current >= 4;
 
-  // 🔧 시작점을 바닥보다 살짝 올려서(갭 원에 안 가리도록) 부드럽게 시작
-  const startLiftLocal = (gapRadius + strokeWidth * 0.6) / heartScaleY; // local 좌표계에서 올릴 값
-  const yStart = (112 + dy) - startLiftLocal; // = B - startLiftLocal
+  // 시작점을 살짝 올려서 갭 원에 가리지 않게
+  const startLiftLocal = (gapRadius + strokeWidth * 0.6) / heartScaleY;
+  const yStart = (112 + dy) - startLiftLocal;
 
   const heartLeftPathD = `
     M150,${yStart}
@@ -64,14 +64,19 @@ export default function ProgressDock({
     if (showHeartL)    next.heartL = true;
     if (showHeartR)    next.heartR = true;
     if (showRightLine) next.right  = true;
-    if (next.left !== ever.left || next.heartL !== ever.heartL || next.heartR !== ever.heartR || next.right !== ever.right) {
+    if (
+      next.left   !== ever.left   ||
+      next.heartL !== ever.heartL ||
+      next.heartR !== ever.heartR ||
+      next.right  !== ever.right
+    ) {
       setEver(next);
       __EVER_REVEALED__ = next;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, showLeftLine, showHeartL, showHeartR, showRightLine]);
 
-  // 🧩 길이+패딩으로 "끝이 덜 채워지는" 현상 제거
+  // "처음 렌더에서 숨김(prehide) → 길이 세팅 → 다음 프레임에 애니메이션 시작"
   function useDrawOnFirstReveal(ref, shouldAnimate, duration, pad = 0) {
     useEffect(() => {
       const el = ref.current;
@@ -92,22 +97,28 @@ export default function ProgressDock({
         }
       } catch { len = 600; }
 
-      const L = len + pad; // 패딩 추가
+      const L = len + pad;
+
+      // 첫 프레임: 길이/오프셋 세팅(숨김 상태 유지)
+      el.style.transition = "none";
       el.style.strokeDasharray = String(L);
       el.style.strokeDashoffset = String(L);
       el.style.willChange = "stroke-dashoffset";
-      el.style.transition = "none";
-      el.getBoundingClientRect();
+      // Safari 깜빡임 줄이기
+      el.style.transform = "translateZ(0)";
+      void el.getBoundingClientRect();
+
+      // 두 번째 프레임: 애니메이션 시작(0으로)
       requestAnimationFrame(() => {
         el.style.transition = `stroke-dashoffset ${duration}ms ease-out`;
         el.style.strokeDashoffset = "0";
+        const clear = () => {
+          el.style.transition = "";
+          el.style.willChange = "";
+          el.style.transform = "";
+        };
+        el.addEventListener("transitionend", clear, { once: true });
       });
-      const clear = () => {
-        el.style.transition = "";
-        el.style.willChange = "";
-      };
-      el.addEventListener("transitionend", clear, { once: true });
-      return () => el.removeEventListener("transitionend", clear);
     }, [ref, shouldAnimate, duration, pad]);
   }
 
@@ -116,7 +127,6 @@ export default function ProgressDock({
   const refHR    = useRef(null);
   const refRight = useRef(null);
 
-  // 선은 적당한 패딩, 하트는 스케일 고려해서 더 큰 패딩
   const padLine  = Math.max(4, strokeWidth * 2);
   const padHeart = Math.max(6, strokeWidth * 3) * Math.max(1, heartScaleY * 0.9);
 
@@ -138,6 +148,11 @@ export default function ProgressDock({
           stroke-linejoin: round;
           shape-rendering: geometricPrecision;
         }
+        /* 첫 페인트에서 보임/사라짐 플래시 방지 */
+        .prehide {
+          stroke-dasharray: 1;
+          stroke-dashoffset: 1;
+        }
       `}</style>
 
       <div className="mx-auto max-w-[720px]">
@@ -155,7 +170,7 @@ export default function ProgressDock({
               x2={leftLine.x2} y2={leftLine.y}
               stroke={stroke}
               strokeWidth={strokeWidth}
-              className="smooth-stroke"
+              className={`smooth-stroke ${animLeft ? "prehide" : ""}`}
             />
           )}
 
@@ -169,7 +184,7 @@ export default function ProgressDock({
                 fill="none"
                 stroke={stroke}
                 strokeWidth={strokeWidth}
-                className="smooth-stroke"
+                className={`smooth-stroke ${animHL ? "prehide" : ""}`}
               />
             )}
             {/* 3: 하트 오른쪽 */}
@@ -180,12 +195,12 @@ export default function ProgressDock({
                 fill="none"
                 stroke={stroke}
                 strokeWidth={strokeWidth}
-                className="smooth-stroke"
+                className={`smooth-stroke ${animHR ? "prehide" : ""}`}
               />
             )}
           </g>
 
-          {/*  하트 최하단 갭 */}
+          {/* 하트 최하단 갭 */}
           {(showHeartL || showHeartR) && (
             <circle cx="150" cy={B} r={gapRadius} fill={gapColor} />
           )}
@@ -198,7 +213,7 @@ export default function ProgressDock({
               x2={rightLine.x2} y2={rightLine.y}
               stroke={stroke}
               strokeWidth={strokeWidth}
-              className="smooth-stroke"
+              className={`smooth-stroke ${animRight ? "prehide" : ""}`}
             />
           )}
         </svg>

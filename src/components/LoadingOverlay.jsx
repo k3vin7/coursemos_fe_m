@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 export default function LoadingOverlay({ open, hints = [] }) {
   const defaultHints = useMemo(
     () => [
+      "오늘은 날씨가 좋네요! ☀️",
       "근처 분위기를 파악하는 중…",
       "사람 덜 붐비는 곳을 찾는 중…",
       "사진이 예쁜 스팟을 고르는 중…",
