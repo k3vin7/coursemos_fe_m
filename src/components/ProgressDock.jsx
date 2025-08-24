@@ -7,37 +7,41 @@ export default function ProgressDock({
   current = 1,
   className = "",
   stroke = "#FF8DB5",
-  strokeWidth = 8,
-  topOffset = "10vh",
-  heartScaleY = 3,
-  dockHeight = 300,
+  strokeWidth = 10,
+  topOffset = "10vh",     // ← 여기만 줄이면 위로 올라갑니다. 예: "6vh"
+  heartScaleY = 4,
+  dockHeight = 200,
   animMs = 800,
-  gapRadius = 0,
+  gapRadius = 8,          // ← 하트 바닥의 갭(원) 반지름. 라운드 캡과 맞물리게 쓰임
   gapColor = "#fff",
 }) {
+  // ===== 좌표계 & 기준선 =====
   const VB_W = 300;
   const VB_H_BASE = 400;
-  const B = 110;
+  const B = 110; // baseline (선분 y, 하트 바닥 y)
 
   const heartTopOriginal = 38;
   const heartBottomOriginal = 112;
-  const dy = B - heartBottomOriginal; // -2
+  const dy = B - heartBottomOriginal; // -2 (원본을 B에 붙이기 위한 보정)
 
   const scaledTop = B + ((heartTopOriginal + dy) - B) * heartScaleY;
   const minY = Math.min(0, Math.floor(scaledTop) - 8);
   const VB_H = VB_H_BASE - minY;
 
-  const leftLine  = { x1: 0,  x2: 130, y: B };
-  const rightLine = { x1: 170, x2: 320, y: B };
+  // 갭 원의 접점에 선분이 정확히 닿도록 오프셋 계산 (라운드 캡 절반 포함)
+  const jointOffset = gapRadius + strokeWidth * 0.5;
+
+  // 선분 좌표 (양 끝은 여백, 하트 쪽 끝은 원 접점으로 정렬)
+  const leftLine  = { x1: 20, x2: 150 - jointOffset, y: B };
+  const rightLine = { x1: 150 + jointOffset, x2: 280, y: B };
 
   const showLeftLine  = current >= 1;
   const showHeartL    = current >= 2;
   const showHeartR    = current >= 3;
   const showRightLine = current >= 4;
 
-  // 시작점을 살짝 올려서 갭 원에 가리지 않게
-  const startLiftLocal = (gapRadius + strokeWidth * 0.6) / heartScaleY;
-  const yStart = (112 + dy) - startLiftLocal;
+  // 하트 경로: **정확히 B에서 시작** (갭 원이 가려줄 거라 lift 불필요)
+  const yStart = B; // = 112 + dy
 
   const heartLeftPathD = `
     M150,${yStart}
@@ -52,6 +56,7 @@ export default function ProgressDock({
     C164,${38+dy} 150,${52+dy} 150,${76+dy}
   `;
 
+  // ===== "한번 나온 건 다시 그리지 않기" 상태 =====
   const [ever, setEver] = useState(() => ({ ...__EVER_REVEALED__ }));
   const animLeft  = showLeftLine  && !ever.left;
   const animHL    = showHeartL    && !ever.heartL;
@@ -64,19 +69,14 @@ export default function ProgressDock({
     if (showHeartL)    next.heartL = true;
     if (showHeartR)    next.heartR = true;
     if (showRightLine) next.right  = true;
-    if (
-      next.left   !== ever.left   ||
-      next.heartL !== ever.heartL ||
-      next.heartR !== ever.heartR ||
-      next.right  !== ever.right
-    ) {
+    if (next.left !== ever.left || next.heartL !== ever.heartL || next.heartR !== ever.heartR || next.right !== ever.right) {
       setEver(next);
       __EVER_REVEALED__ = next;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, showLeftLine, showHeartL, showHeartR, showRightLine]);
 
-  // "처음 렌더에서 숨김(prehide) → 길이 세팅 → 다음 프레임에 애니메이션 시작"
+  // ===== 드로잉 애니메이션 훅 (prehide + 더블 RAF) =====
   function useDrawOnFirstReveal(ref, shouldAnimate, duration, pad = 0) {
     useEffect(() => {
       const el = ref.current;
@@ -99,16 +99,15 @@ export default function ProgressDock({
 
       const L = len + pad;
 
-      // 첫 프레임: 길이/오프셋 세팅(숨김 상태 유지)
+      // 첫 프레임: 숨겨진 상태로 길이 세팅
       el.style.transition = "none";
       el.style.strokeDasharray = String(L);
       el.style.strokeDashoffset = String(L);
       el.style.willChange = "stroke-dashoffset";
-      // Safari 깜빡임 줄이기
-      el.style.transform = "translateZ(0)";
+      el.style.transform = "translateZ(0)"; // Safari 깜빡임 감소
       void el.getBoundingClientRect();
 
-      // 두 번째 프레임: 애니메이션 시작(0으로)
+      // 다음 프레임: 애니메이션 시작
       requestAnimationFrame(() => {
         el.style.transition = `stroke-dashoffset ${duration}ms ease-out`;
         el.style.strokeDashoffset = "0";
@@ -127,13 +126,14 @@ export default function ProgressDock({
   const refHR    = useRef(null);
   const refRight = useRef(null);
 
-  const padLine  = Math.max(4, strokeWidth * 2);
-  const padHeart = Math.max(6, strokeWidth * 3) * Math.max(1, heartScaleY * 0.9);
+  // 하트는 곡선 + 라운드캡이라 약간 더 padding, 선분은 적당히
+  const padLine  = Math.max(4, strokeWidth * 1.5);
+  const padHeart = Math.max(8, strokeWidth * 2.0) * Math.max(1, heartScaleY * 0.9);
 
-  useDrawOnFirstReveal(refLeft,  animLeft,  Math.max(200, animMs * 0.7), padLine);
+  useDrawOnFirstReveal(refLeft,  animLeft,  Math.max(220, animMs * 0.7), padLine);
   useDrawOnFirstReveal(refHL,    animHL,    animMs,                       padHeart);
   useDrawOnFirstReveal(refHR,    animHR,    animMs,                       padHeart);
-  useDrawOnFirstReveal(refRight, animRight, Math.max(200, animMs * 0.7), padLine);
+  useDrawOnFirstReveal(refRight, animRight, Math.max(220, animMs * 0.7), padLine);
 
   return createPortal(
     <div
@@ -148,11 +148,7 @@ export default function ProgressDock({
           stroke-linejoin: round;
           shape-rendering: geometricPrecision;
         }
-        /* 첫 페인트에서 보임/사라짐 플래시 방지 */
-        .prehide {
-          stroke-dasharray: 1;
-          stroke-dashoffset: 1;
-        }
+        .prehide { stroke-dasharray: 1; stroke-dashoffset: 1; }
       `}</style>
 
       <div className="mx-auto max-w-[720px]">
@@ -162,7 +158,7 @@ export default function ProgressDock({
           height={dockHeight}
           preserveAspectRatio="none"
         >
-          {/* 1: 왼쪽 선분 */}
+          {/* 1: 왼쪽 선분 (끝점이 갭 원 접선에 딱 맞게) */}
           {showLeftLine && (
             <line
               ref={refLeft}
@@ -176,7 +172,7 @@ export default function ProgressDock({
 
           {/* 하트(세로 스케일: pivot=B) */}
           <g transform={`translate(0 ${B}) scale(1 ${heartScaleY}) translate(0 ${-B})`}>
-            {/* 2: 하트 왼쪽 */}
+            {/* 2: 하트 왼쪽 — 시작점은 baseline(B)과 동일 */}
             {showHeartL && (
               <path
                 ref={refHL}
@@ -200,12 +196,12 @@ export default function ProgressDock({
             )}
           </g>
 
-          {/* 하트 최하단 갭 */}
+          {/* 하트 바닥 갭(라인/하트가 교차하는 부분을 깔끔하게 가림) */}
           {(showHeartL || showHeartR) && (
             <circle cx="150" cy={B} r={gapRadius} fill={gapColor} />
           )}
 
-          {/* 4: 오른쪽 선분 */}
+          {/* 4: 오른쪽 선분 (시작점이 갭 원 접선에 딱 맞게) */}
           {showRightLine && (
             <line
               ref={refRight}
