@@ -121,7 +121,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
           <h3 className="text-xl font-bold">마이페이지</h3>
           <button
             onClick={onClose}
-            className="px-3 h-9 text-gray-600"
+            className="px-3 h-9 text-gray-600 text-2xl"
           >
             ×
           </button>
@@ -136,7 +136,7 @@ export default function MyPageModal({ open, onClose, onLogout }) {
             />
           ) : (
             <div className="w-20 h-20 rounded-full bg-gray-200 grid place-items-center text-xl font-semibold text-gray-600 border">
-              {displayName?.[0] || displayEmail?.[0] || "🙂"}
+              {displayName?.[0] || displayEmail?.[0] || "🙂"}   
             </div>
           )}
           <div className="flex-1">

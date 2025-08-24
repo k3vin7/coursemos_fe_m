@@ -1,3 +1,4 @@
+// src/pages/Optional_Time.jsx
 import { useEffect, useState } from "react";
 import TimePicker from "../components/TimePicker.jsx";
 import ProgressDock from "../components/ProgressDock.jsx";
@@ -9,8 +10,24 @@ export default function Optional_Time({
   initialHour = null,
   initialMinute = 0,
 }) {
-  const [hour, setHour] = useState(initialHour);
-  const [minute, setMinute] = useState(initialMinute);
+  // ✅ 초기값: initialHour가 null이면 '현재 시각' 사용 (분은 5분단위 반올림)
+  const [hour, setHour] = useState(() => {
+    if (initialHour !== null) return initialHour;
+    const now = new Date();
+    const rawM = now.getMinutes();
+    let m = Math.round(rawM / 5) * 5;
+    let h = now.getHours();
+    if (m === 60) { h = (h + 1) % 24; m = 0; }
+    return h;
+  });
+
+  const [minute, setMinute] = useState(() => {
+    if (initialHour !== null) return initialMinute;
+    const now = new Date();
+    let m = Math.round(now.getMinutes() / 5) * 5;
+    if (m === 60) m = 0;
+    return m;
+  });
 
   useEffect(() => {
     if (hour !== null) onChange?.({ hour, minute, label: toTimeLabel(hour, minute) });

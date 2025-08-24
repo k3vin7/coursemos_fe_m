@@ -42,7 +42,7 @@ const deepCollectArrays = (obj) => {
   return arrays;
 };
 
-/* ---------- 키 매핑 & 정규화 (Optional_Result와 동일한 로직) ---------- */
+/* ---------- 키 매핑 & 정규화 (Optional_Result와 동일) ---------- */
 const getAny = (o, keys = []) => {
   for (const k of keys) {
     if (o && k in o && isNonEmpty(o[k])) return o[k];
@@ -229,7 +229,7 @@ function normalizeGeneric(input) {
   return [];
 }
 
-/* ---------- 상세 모달 (Optional_Result와 동일) ---------- */
+/* ---------- 상세 모달 ---------- */
 function KeyValueList({ obj, omit = [] }) {
   if (!obj || typeof obj !== "object") return null;
   const entries = Object.entries(obj).filter(([k, v]) => !omit.includes(k) && isNonEmpty(v));
@@ -378,6 +378,28 @@ function CourseDetailModal({ open, course, onClose }) {
   );
 }
 
+/* ---------- 주소 우선 + 지터 재시도 ---------- */
+// 좌표 → 주소 문자열(도로명 > 지번 > 행정동)
+async function resolveLocationString(lat, lng) {
+  try {
+    const r = await reverseGeocode({ lat, lng });
+    const road = (r?.road || "").trim();
+    const jibun = (r?.jibun || "").trim();
+    const admin = [r?.sido, r?.sigungu, r?.dong].filter(Boolean).join(" ").trim();
+    return road || jibun || admin || "";
+  } catch {
+    return "";
+  }
+}
+// 좌표 지터(±meters m)
+function jitter(lat, lng, meters = 20) {
+  const dx = (Math.random() * 2 - 1) * meters;
+  const dy = (Math.random() * 2 - 1) * meters;
+  const dLat = dy / 111320;
+  const dLng = dx / (111320 * Math.cos((lat * Math.PI) / 180));
+  return { lat: lat + dLat, lng: lng + dLng };
+}
+
 /* ---------- 페이지 컴포넌트 ---------- */
 export default function Recommendation_AI({ onPrev, onNext }) {
   const [loading, setLoading] = useState(true);
@@ -385,7 +407,6 @@ export default function Recommendation_AI({ onPrev, onNext }) {
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState(null);
 
-  // 오늘/현재시각 라벨
   const now = new Date();
   const dateISO = now.toISOString().slice(0, 10);
   const timeLabel = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -396,7 +417,6 @@ export default function Recommendation_AI({ onPrev, onNext }) {
     setError("");
     setResult(null);
 
-    // 현위치 가져오기 (fallback: 서울시청)
     const getGeo = () =>
       new Promise((resolve) => {
         if (!("geolocation" in navigator)) {
@@ -411,47 +431,54 @@ export default function Recommendation_AI({ onPrev, onNext }) {
       });
 
     (async () => {
-      const { lat, lng } = await getGeo();
+      let { lat, lng } = await getGeo();
+      let locationStr = await resolveLocationString(lat, lng);
+      if (!locationStr) locationStr = `${lng},${lat}`;
 
-      // ✅ 먼저 주소를 얻어서 location에 주소를 넣고, 없으면 "lng,lat"로 폴백
-      let addr = "";
-      try {
-        const r = await reverseGeocode({ lat, lng });
-        addr = (r?.jibun || r?.road || "").trim();
-      } catch {}
-
-      const payload = {
-        date: dateISO,
-        time: timeLabel,
-        location: addr || `${lng},${lat}`,
-        lat,
-        lng,
-        etc: "",
-      };
-
-      try {
-        const data = await postRecommend(payload);
-        if (!alive) return;
-        setResult(data);
-      } catch (e) {
-        if (!alive) return;
-        // 404(VWorld 미스) 등도 사용자 친화적으로 안내
-        const msg = e?.message || "";
-        const isVWorldMiss = /VWorld 결과 없음/i.test(msg) || /404/.test(msg);
-        setError(
-          isVWorldMiss
-            ? "현위치가 도로/경계선으로 잡혀 주소를 찾지 못했어요. 장소 단계에서 지도로 정확한 위치를 선택해 보세요."
-            : (msg || "추천 요청 실패")
-        );
-      } finally {
-        if (!alive) return;
-        setLoading(false);
+      let attempts = 0;
+      const maxAttempts = 3; // 최초 1회 + 지터 2회
+      while (attempts < maxAttempts) {
+        try {
+          const payload = {
+            date: dateISO,
+            time: timeLabel,
+            location: locationStr,
+            lat,
+            lng,
+            etc: "",
+          };
+          const data = await postRecommend(payload);
+          if (!alive) return;
+          setResult(data);
+          setError("");
+          break; // 성공
+        } catch (e) {
+          if (!alive) return;
+          const msg = e?.message || "";
+          const miss = /VWorld 결과 없음/i.test(msg) || /404/.test(msg);
+          attempts++;
+          if (miss && attempts < maxAttempts) {
+            const meters = 20 * attempts; // 20m → 40m
+            const j = jitter(lat, lng, meters);
+            lat = j.lat; lng = j.lng;
+            locationStr = (await resolveLocationString(lat, lng)) || `${lng},${lat}`;
+            continue;
+          }
+          setError(
+            miss
+              ? "현위치가 도로/경계선으로 잡혀 위치 인식에 실패했어요. ‘장소’ 단계에서 지도로 정확한 위치를 선택해 주세요."
+              : (msg || "추천 요청 실패")
+          );
+        } finally {
+          if (attempts >= maxAttempts && alive) setLoading(false);
+        }
       }
+      if (alive) setLoading(false);
     })();
 
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 마운트 시 1회 자동 추천
+  }, []);
 
   const { courseGroups, fallbackCards } = useMemo(() => {
     const groups = extractCourseGroups(result);
