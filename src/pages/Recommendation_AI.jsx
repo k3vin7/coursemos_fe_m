@@ -470,24 +470,6 @@ export default function Recommendation_AI({ onPrev, onNext }) {
               기준: <b>{dateISO}</b> {timeLabel} · 장소: <b>현위치</b> · 추가정보: 없음
             </p>
           </div>
-          <div className="flex gap-2">
-            {onPrev && (
-              <button
-                className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95"
-                onClick={onPrev}
-              >
-                이전
-              </button>
-            )}
-            {onNext && (
-              <button
-                className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95"
-                onClick={onNext}
-              >
-                다음
-              </button>
-            )}
-          </div>
         </div>
 
         {/* 로딩 스켈레톤 */}
