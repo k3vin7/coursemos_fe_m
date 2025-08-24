@@ -1,42 +1,38 @@
 import { createPortal } from "react-dom";
 
 export default function ProgressDock({
-  current = 1,
+  current = 1,           // 1: 왼선, 2: 하트L, 3: 하트R(←역방향), 4: 오른선
   className = "",
   stroke = "#FF8DB5",
   strokeWidth = 10,
-  topOffset = "10vh",    // 필요시 "6vh" 등으로 올리기
+  topOffset = "10vh",
   heartScaleY = 4,
   dockHeight = 200,
-  gapRadius = 8,         // 하트 바닥 갭 크기
-  gapColor = "#fff",     // (mask 방식이라 실제로는 쓰이지 않지만 남겨둠)
+  gapRadius = 8,
+  animMs = 1000,
 }) {
   const VB_W = 300;
   const VB_H_BASE = 400;
-  const B = 110; // 베이스라인(y)
+  const B = 110;
 
-  // 원본 하트 기준점
   const heartTopOriginal = 38;
   const heartBottomOriginal = 112;
-  const dy = B - heartBottomOriginal; // -2
+  const dy = B - heartBottomOriginal;
 
-  // 세로 스케일 시 위쪽이 잘리지 않도록 viewBox 보정
   const scaledTop = B + ((heartTopOriginal + dy) - B) * heartScaleY;
-  const minY = Math.min(0, Math.floor(scaledTop) - 8);
+  const topPad = Math.max(16, Math.ceil(strokeWidth * (heartScaleY + 0.5)));
+  const minY = Math.floor(Math.min(0, scaledTop - topPad));
   const VB_H = VB_H_BASE - minY;
 
-  // 갭 접점과 라인 조인트 정렬
-  const jointOffset = gapRadius + strokeWidth * 0.5;
+  // ★ 하트 스케일에 맞춰 라인만 굵기 보정
+  const heartStrokeFactor = (1 + heartScaleY) / 2 + 1;      // 대략치
+  // const heartStrokeFactor = heartScaleY;              // 더 강하게 맞추고 싶으면 이걸로
+  const lineStrokeWidth = strokeWidth * heartStrokeFactor;
+
+  const jointOffset = gapRadius + lineStrokeWidth * 0.5; // 라인 굵기에 맞춰 접점 보정
   const leftLine  = { x1: 20, x2: 150 - jointOffset, y: B };
   const rightLine = { x1: 150 + jointOffset, x2: 280, y: B };
 
-  // 스텝 표시
-  const showLeftLine  = current >= 1;
-  const showHeartL    = current >= 2;
-  const showHeartR    = current >= 3;
-  const showRightLine = current >= 4;
-
-  // 하트 곡선 (베이스라인에서 시작)
   const yStart = B;
   const heartLeftPathD = `
     M150,${yStart}
@@ -51,6 +47,14 @@ export default function ProgressDock({
     C164,${38+dy} 150,${52+dy} 150,${76+dy}
   `;
 
+  const L = 1000;
+  const drawnStyle = { strokeDasharray: L, strokeDashoffset: 0 };
+
+  const showLeftLine  = current >= 1;
+  const showHeartL    = current >= 2;
+  const showHeartR    = current >= 3;
+  const showRightLine = current >= 4;
+
   return createPortal(
     <div
       className={`pointer-events-none fixed left-0 right-0 z-[50] ${className}`}
@@ -58,8 +62,25 @@ export default function ProgressDock({
       aria-hidden
     >
       <style>{`
+        @keyframes progressDraw {
+          from { stroke-dashoffset: ${L}; }
+          to   { stroke-dashoffset: 0; }
+        }
+        @keyframes progressDrawRev {
+          from { stroke-dashoffset: -${L}; }
+          to   { stroke-dashoffset: 0; }
+        }
+        .progress-draw {
+          stroke-dasharray: ${L};
+          stroke-dashoffset: ${L};
+          animation: progressDraw ${animMs}ms ease-out forwards;
+        }
+        .progress-draw-rev {
+          stroke-dasharray: ${L};
+          stroke-dashoffset: -${L};
+          animation: progressDrawRev ${animMs}ms ease-out forwards;
+        }
         .smooth-stroke {
-          vector-effect: non-scaling-stroke;
           stroke-linecap: round;
           stroke-linejoin: round;
           shape-rendering: geometricPrecision;
@@ -74,27 +95,26 @@ export default function ProgressDock({
           preserveAspectRatio="none"
         >
           <defs>
-            {/* 하트에만 구멍을 내는 마스크 */}
             <mask id="heartGapMask" maskUnits="userSpaceOnUse">
-              {/* 전체는 보이게(흰색) */}
-              <rect x="-1000" y={minY - 1000} width="3000" height="3000" fill="white" />
-              {/* 하단 갭은 가리게(검정) */}
+              <rect x="-10000" y={minY - 10000} width="20000" height="20000" fill="white" />
               <circle cx="150" cy={B} r={gapRadius + 0.5} fill="black" />
             </mask>
           </defs>
 
-          {/* 1: 왼쪽 선분 */}
+          {/* 1: 왼쪽 선분 — 라인만 굵기 보정 적용 */}
           {showLeftLine && (
             <line
               x1={leftLine.x1} y1={leftLine.y}
               x2={leftLine.x2} y2={leftLine.y}
               stroke={stroke}
-              strokeWidth={strokeWidth}
-              className="smooth-stroke"
+              strokeWidth={lineStrokeWidth}
+              className={`smooth-stroke ${current === 1 ? "progress-draw" : ""}`}
+              pathLength={L}
+              style={current > 1 ? drawnStyle : undefined}
             />
           )}
 
-          {/* 2~3: 하트(세로 스케일: pivot=B) — 마스크로 바닥 갭 */}
+          {/* 2~3: 하트 — 원래 strokeWidth, 그룹 scaleY로 굵어짐 */}
           <g
             transform={`translate(0 ${B}) scale(1 ${heartScaleY}) translate(0 ${-B})`}
             mask="url(#heartGapMask)"
@@ -105,7 +125,9 @@ export default function ProgressDock({
                 fill="none"
                 stroke={stroke}
                 strokeWidth={strokeWidth}
-                className="smooth-stroke"
+                className={`smooth-stroke ${current === 2 ? "progress-draw" : ""}`}
+                pathLength={L}
+                style={current > 2 ? drawnStyle : undefined}
               />
             )}
             {showHeartR && (
@@ -114,19 +136,23 @@ export default function ProgressDock({
                 fill="none"
                 stroke={stroke}
                 strokeWidth={strokeWidth}
-                className="smooth-stroke"
+                className={`smooth-stroke ${current === 3 ? "progress-draw-rev" : ""}`}
+                pathLength={L}
+                style={current > 3 ? drawnStyle : undefined}
               />
             )}
           </g>
 
-          {/* 4: 오른쪽 선분 */}
+          {/* 4: 오른쪽 선분 — 라인만 굵기 보정 적용 */}
           {showRightLine && (
             <line
               x1={rightLine.x1} y1={rightLine.y}
               x2={rightLine.x2} y2={rightLine.y}
               stroke={stroke}
-              strokeWidth={strokeWidth}
-              className="smooth-stroke"
+              strokeWidth={lineStrokeWidth}
+              className={`smooth-stroke ${current === 4 ? "progress-draw" : ""}`}
+              pathLength={L}
+              style={current > 4 ? drawnStyle : undefined}
             />
           )}
         </svg>
