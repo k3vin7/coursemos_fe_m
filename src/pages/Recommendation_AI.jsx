@@ -57,11 +57,7 @@ function normalizeStop(stopRaw = {}) {
   const suggested_time_of_day = getAny(stopRaw, ["suggested_time_of_day", "권장시간대", "time_of_day"]);
   const photo_url = getAny(stopRaw, ["photo_url", "image_url", "image", "img", "thumbnail"]);
   const durationLike = getAny(stopRaw, [
-    "typical_duration_min",
-    "duration_min",
-    "권장체류시간",
-    "stay_minutes",
-    "duration",
+    "typical_duration_min", "duration_min", "권장체류시간", "stay_minutes", "duration",
   ]);
   const typical_duration_min = isNonEmpty(durationLike) ? Number(durationLike) : undefined;
 
@@ -272,13 +268,7 @@ function CourseDetailModal({ open, course, onClose }) {
           <div className="sticky top-0 z-10 bg-white/95 backdrop-blur px-5 py-3 border-b">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold truncate">{course.title}</h2>
-              <button
-                aria-label="닫기"
-                onClick={onClose}
-                className="w-9 h-9 rounded-full border grid place-items-center hover:bg-gray-50 active:scale-95"
-              >
-                ×
-              </button>
+              <button aria-label="닫기" onClick={onClose} className="w-9 h-9 rounded-full border grid place-items-center hover:bg-gray-50 active:scale-95">×</button>
             </div>
             {course.subtitle ? (
               <p className="text-sm text-gray-500 mt-1 line-clamp-1">{course.subtitle}</p>
@@ -290,9 +280,7 @@ function CourseDetailModal({ open, course, onClose }) {
               <h3 className="text-base font-semibold mb-2">코스 정보</h3>
               <div className="text-sm text-gray-700">
                 {isNonEmpty(norm?.total_estimated_minutes) && (
-                  <div className="mb-1">
-                    총 예상 소요: <b>{minutesToLabel(norm.total_estimated_minutes)}</b>
-                  </div>
+                  <div className="mb-1">총 예상 소요: <b>{minutesToLabel(norm.total_estimated_minutes)}</b></div>
                 )}
                 <KeyValueList obj={courseExtra} omit={["스톱", "stops", "Stops"]} />
               </div>
@@ -306,61 +294,36 @@ function CourseDetailModal({ open, course, onClose }) {
                     <li key={i} className="p-3 rounded-2xl border bg-white">
                       <div className="flex gap-3">
                         {s.photo_url ? (
-                          <img
-                            src={s.photo_url}
-                            alt={s.name || `스탑 ${i + 1}`}
-                            className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
+                          <img src={s.photo_url} alt={s.name || `스탑 ${i + 1}`} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" loading="lazy" referrerPolicy="no-referrer" />
                         ) : (
-                          <div className="w-16 h-16 rounded-xl bg-gray-100 grid place-items-center flex-shrink-0">
-                            <span className="text-xl">📍</span>
-                          </div>
+                          <div className="w-16 h-16 rounded-xl bg-gray-100 grid place-items-center flex-shrink-0"><span className="text-xl">📍</span></div>
                         )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">{i + 1}</span>
-                            <h4 className="font-medium text-gray-800 truncate">
-                              {s.name || `스탑 ${i + 1}`}
-                            </h4>
+                            <h4 className="font-medium text-gray-800 truncate">{s.name || `스탑 ${i + 1}`}</h4>
                             {isNonEmpty(s.typical_duration_min) && (
                               <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
                                 {minutesToLabel(s.typical_duration_min)}
                               </span>
                             )}
                           </div>
-
                           {(s.category || s.suggested_time_of_day) && (
                             <div className="flex gap-1.5 mt-1">
-                              {s.category && (
-                                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 border">
-                                  {s.category}
-                                </span>
-                              )}
-                              {s.suggested_time_of_day && (
-                                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 border">
-                                  {s.suggested_time_of_day}
-                                </span>
-                              )}
+                              {s.category && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 border">{s.category}</span>}
+                              {s.suggested_time_of_day && <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 border">{s.suggested_time_of_day}</span>}
                             </div>
                           )}
-
-                          {s.desc && (
-                            <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">
-                              {s.desc}
-                            </p>
-                          )}
-
+                          {s.desc && <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">{s.desc}</p>}
                           <KeyValueList
                             obj={s._original}
                             omit={[
-                              "photo_url", "image_url", "image", "img", "thumbnail",
-                              "장소명", "name", "place", "title", "label",
-                              "설명", "desc", "description", "summary", "explain", "text",
-                              "권장체류시간", "typical_duration_min", "duration_min", "stay_minutes", "duration",
-                              "카테고리", "category", "type",
-                              "권장시간대", "suggested_time_of_day", "time_of_day",
+                              "photo_url","image_url","image","img","thumbnail",
+                              "장소명","name","place","title","label",
+                              "설명","desc","description","summary","explain","text",
+                              "권장체류시간","typical_duration_min","duration_min","stay_minutes","duration",
+                              "카테고리","category","type",
+                              "권장시간대","suggested_time_of_day","time_of_day",
                             ]}
                           />
                         </div>
@@ -378,7 +341,7 @@ function CourseDetailModal({ open, course, onClose }) {
   );
 }
 
-/* ---------- 주소 우선 + 지터 재시도 ---------- */
+/* ---------- 주소 우선 + 지터 + 더 정확한 위치 대기 ---------- */
 // 좌표 → 주소 문자열(도로명 > 지번 > 행정동)
 async function resolveLocationString(lat, lng) {
   try {
@@ -399,6 +362,45 @@ function jitter(lat, lng, meters = 20) {
   const dLng = dx / (111320 * Math.cos((lat * Math.PI) / 180));
   return { lat: lat + dLat, lng: lng + dLng };
 }
+// 더 정확한 위치를 2.5초 동안 기다리며 수집
+function getBestGeoFix(timeoutMs = 15000, settleMs = 2500) {
+  return new Promise((resolve) => {
+    if (!("geolocation" in navigator)) {
+      resolve({ lat: 37.5665, lng: 126.9780 });
+      return;
+    }
+    let best = null;
+    let timer = null;
+    const done = () => {
+      try { navigator.geolocation.clearWatch(watchId); } catch {}
+      clearTimeout(timer);
+      if (best) resolve({ lat: best.coords.latitude, lng: best.coords.longitude });
+      else resolve({ lat: 37.5665, lng: 126.9780 });
+    };
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!best || (pos.coords.accuracy || 1e9) < (best.coords.accuracy || 1e9)) {
+          best = pos;
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs }
+    );
+    timer = setTimeout(done, settleMs);
+    // 백업: 너무 오래 끌면 강제 종료
+    setTimeout(done, Math.max(settleMs + 1000, 3000));
+  });
+}
+// payload 생성: 주소면 lat/lng를 넣지 않음(중요)
+function buildPayload({ dateISO, timeLabel, locationStr, lat, lng }) {
+  const base = { date: dateISO, time: timeLabel, location: locationStr, etc: "" };
+  const isCoordStr = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(locationStr);
+  if (isCoordStr) {
+    base.lat = lat;
+    base.lng = lng;
+  }
+  return base;
+}
 
 /* ---------- 페이지 컴포넌트 ---------- */
 export default function Recommendation_AI({ onPrev, onNext }) {
@@ -417,36 +419,19 @@ export default function Recommendation_AI({ onPrev, onNext }) {
     setError("");
     setResult(null);
 
-    const getGeo = () =>
-      new Promise((resolve) => {
-        if (!("geolocation" in navigator)) {
-          resolve({ lat: 37.5665, lng: 126.9780 });
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-          () => resolve({ lat: 37.5665, lng: 126.9780 }),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-        );
-      });
-
     (async () => {
-      let { lat, lng } = await getGeo();
+      // 더 정확한 위치를 잠깐 기다림
+      let { lat, lng } = await getBestGeoFix(15000, 2500);
+
+      // 주소 우선
       let locationStr = await resolveLocationString(lat, lng);
-      if (!locationStr) locationStr = `${lng},${lat}`;
+      if (!locationStr) locationStr = `${lng},${lat}`; // 최후 폴백
 
       let attempts = 0;
       const maxAttempts = 3; // 최초 1회 + 지터 2회
       while (attempts < maxAttempts) {
         try {
-          const payload = {
-            date: dateISO,
-            time: timeLabel,
-            location: locationStr,
-            lat,
-            lng,
-            etc: "",
-          };
+          const payload = buildPayload({ dateISO, timeLabel, locationStr, lat, lng });
           const data = await postRecommend(payload);
           if (!alive) return;
           setResult(data);
@@ -458,7 +443,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
           const miss = /VWorld 결과 없음/i.test(msg) || /404/.test(msg);
           attempts++;
           if (miss && attempts < maxAttempts) {
-            const meters = 20 * attempts; // 20m → 40m
+            const meters = 25 * attempts; // 25m → 50m
             const j = jitter(lat, lng, meters);
             lat = j.lat; lng = j.lng;
             locationStr = (await resolveLocationString(lat, lng)) || `${lng},${lat}`;
@@ -497,16 +482,25 @@ export default function Recommendation_AI({ onPrev, onNext }) {
               기준: <b>{dateISO}</b> {timeLabel} · 장소: <b>현위치</b> · 추가정보: 없음
             </p>
           </div>
+          <div className="flex gap-2">
+            {onPrev && (
+              <button className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95" onClick={onPrev}>
+                이전
+              </button>
+            )}
+            {onNext && (
+              <button className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95" onClick={onNext}>
+                다음
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 로딩 스켈레톤 */}
         {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-pulse"
-              >
+              <div key={i} className="rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-pulse">
                 <div className="h-40 bg-gray-200" />
                 <div className="p-4 space-y-2">
                   <div className="h-5 bg-gray-200 rounded" />
@@ -520,9 +514,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
 
         {/* 에러 */}
         {!loading && error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4">{error}</div>
         )}
 
         {/* 코스 결과 */}
@@ -530,9 +522,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
           <div className="space-y-8">
             {courseGroups.map((g, gi) => (
               <section key={gi}>
-                {courseGroups.length > 1 && (
-                  <h2 className="text-lg font-semibold mb-3">{g.title}</h2>
-                )}
+                {courseGroups.length > 1 && <h2 className="text-lg font-semibold mb-3">{g.title}</h2>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {g.cards.map((c, i) => (
                     <article
@@ -542,45 +532,25 @@ export default function Recommendation_AI({ onPrev, onNext }) {
                       className="group cursor-pointer rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white hover:shadow-lg transition"
                     >
                       {c.image ? (
-                        <img
-                          src={c.image}
-                          alt={c.title}
-                          className="w-full h-44 object-cover"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                        />
+                        <img src={c.image} alt={c.title} className="w-full h-44 object-cover" referrerPolicy="no-referrer" loading="lazy" />
                       ) : (
                         <div className="w-full h-44 bg-gradient-to-b from-rose-50 to-white flex items-center justify-center">
                           <span className="text-4xl">🧭</span>
                         </div>
                       )}
-
                       <div className="p-4">
                         <h3 className="text-lg font-semibold line-clamp-1">{c.title}</h3>
-                        {c.subtitle && (
-                          <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">{c.subtitle}</p>
-                        )}
-                        {c.description && (
-                          <p className="text-sm text-gray-700 mt-2">{truncate(c.description, 160)}</p>
-                        )}
+                        {c.subtitle && <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">{c.subtitle}</p>}
+                        {c.description && <p className="text-sm text-gray-700 mt-2">{truncate(c.description, 160)}</p>}
                         {Array.isArray(c.tags) && c.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {c.tags.slice(0, 5).map((t, j) => (
-                              <span
-                                key={j}
-                                className="text-xs px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
-                              >
-                                {String(t)}
-                              </span>
+                              <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">{String(t)}</span>
                             ))}
                           </div>
                         )}
-
                         <div className="mt-4 flex items-center gap-2">
-                          <button
-                            className="ml-auto px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95"
-                            onClick={(e) => { e.stopPropagation(); setSelected(c); }}
-                          >
+                          <button className="ml-auto px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95" onClick={(e) => { e.stopPropagation(); setSelected(c); }}>
                             상세 보기
                           </button>
                         </div>
@@ -597,41 +567,22 @@ export default function Recommendation_AI({ onPrev, onNext }) {
         {!loading && !error && courseGroups.length === 0 && result && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {normalizeGeneric(result).map((c, i) => (
-              <article
-                key={c.id ?? i}
-                className="group rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white hover:shadow-lg transition"
-              >
+              <article key={c.id ?? i} className="group rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white hover:shadow-lg transition">
                 {c.image ? (
-                  <img
-                    src={c.image}
-                    alt={c.title}
-                    className="w-full h-44 object-cover"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                  />
+                  <img src={c.image} alt={c.title} className="w-full h-44 object-cover" referrerPolicy="no-referrer" loading="lazy" />
                 ) : (
                   <div className="w-full h-44 bg-gradient-to-b from-rose-50 to-white flex items-center justify-center">
                     <span className="text-4xl">🧭</span>
                   </div>
                 )}
-
                 <div className="p-4">
                   <h3 className="text-lg font-semibold line-clamp-1">{c.title}</h3>
-                  {c.subtitle && (
-                    <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">{c.subtitle}</p>
-                  )}
-                  {c.description && (
-                    <p className="text-sm text-gray-700 mt-2">{truncate(c.description, 160)}</p>
-                  )}
+                  {c.subtitle && <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">{c.subtitle}</p>}
+                  {c.description && <p className="text-sm text-gray-700 mt-2">{truncate(c.description, 160)}</p>}
                   {Array.isArray(c.tags) && c.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {c.tags.slice(0, 5).map((t, j) => (
-                        <span
-                          key={j}
-                          className="text-xs px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
-                        >
-                          {String(t)}
-                        </span>
+                        <span key={j} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">{String(t)}</span>
                       ))}
                     </div>
                   )}
@@ -641,10 +592,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
           </div>
         )}
 
-        {/* 결과 없음 */}
-        {!loading && !error && !result && (
-          <div className="text-gray-500">표시할 결과가 없어요.</div>
-        )}
+        {!loading && !error && !result && <div className="text-gray-500">표시할 결과가 없어요.</div>}
       </div>
 
       {/* 상세 모달 */}

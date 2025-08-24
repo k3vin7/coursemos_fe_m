@@ -28,7 +28,7 @@ export default function ProgressDock({
   const VB_H = VB_H_BASE - minY;
 
   const leftLine  = { x1: 0,  x2: 130, y: B };
-  const rightLine = { x1: 190, x2: 320, y: B };
+  const rightLine = { x1: 170, x2: 320, y: B };
 
   const showLeftLine  = current >= 1;
   const showHeartL    = current >= 2;
