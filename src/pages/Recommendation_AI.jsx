@@ -415,6 +415,99 @@ function buildPayload({ dateISO, timeLabel, locationStr, lat, lng }) {
   return base;
 }
 
+// ★ 개발용 더미 데이터
+const USE_MOCK = true; // 개발 테스트 시 true 로 켜두면 항상 더미로 동작
+
+function buildDummyResult() {
+  // extractCourseGroups 가 인식하는 구조: { courses: [ {stops:[...] } ] }
+  return {
+    courses: [
+      {
+        id: "c1",
+        title: "한강 피크닉 반나절",
+        total_estimated_minutes: 180,
+        stops: [
+          {
+            name: "여의도 한강공원",
+            category: "공원",
+            suggested_time_of_day: "오후",
+            typical_duration_min: 60,
+            photo_url: "https://picsum.photos/seed/hanriver/800/600",
+            desc: "잔디밭에서 돗자리 펴기 좋은 스팟",
+          },
+          {
+            name: "밤섬전망대",
+            category: "전망",
+            typical_duration_min: 30,
+            photo_url: "https://picsum.photos/seed/viewdeck/800/600",
+            desc: "한강과 스카이라인 야경",
+          },
+          {
+            name: "노을 카페",
+            category: "카페",
+            suggested_time_of_day: "해질녘",
+            typical_duration_min: 90,
+            photo_url: "https://picsum.photos/seed/suncafe/800/600",
+            desc: "리버뷰 디저트 카페",
+          },
+        ],
+      },
+      {
+        id: "c2",
+        title: "홍대 감성 산책",
+        total_estimated_minutes: 150,
+        stops: [
+          {
+            name: "연남동 경의선숲길",
+            category: "산책",
+            typical_duration_min: 45,
+            photo_url: "https://picsum.photos/seed/yeonnam/800/600",
+          },
+          {
+            name: "소품샵 골목",
+            category: "쇼핑",
+            typical_duration_min: 40,
+            photo_url: "https://picsum.photos/seed/propshop/800/600",
+          },
+          {
+            name: "브런치 카페",
+            category: "카페",
+            typical_duration_min: 65,
+            photo_url: "https://picsum.photos/seed/brunch/800/600",
+          },
+        ],
+      },
+      {
+        id: "c3",
+        title: "북촌 한옥 감상",
+        total_estimated_minutes: 120,
+        stops: [
+          {
+            name: "북촌한옥마을 골목",
+            category: "역사",
+            suggested_time_of_day: "오전",
+            typical_duration_min: 50,
+            photo_url: "https://picsum.photos/seed/hanok/800/600",
+          },
+          {
+            name: "전통차 한 잔",
+            category: "카페",
+            typical_duration_min: 40,
+            photo_url: "https://picsum.photos/seed/teahouse/800/600",
+          },
+          {
+            name: "사진 포인트",
+            category: "포토",
+            typical_duration_min: 30,
+            photo_url: "https://picsum.photos/seed/photospot/800/600",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
 /* ---------- 페이지 ---------- */
 export default function Recommendation_AI({ onPrev, onNext }) {
   const [loading, setLoading] = useState(true);
@@ -425,12 +518,27 @@ export default function Recommendation_AI({ onPrev, onNext }) {
   const now = new Date();
   const dateISO = now.toISOString().slice(0, 10);
   const timeLabel = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
+  
   useEffect(() => {
+    const useMock =
+      USE_MOCK ||
+      (typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("mock") === "1");
+
     let alive = true;
     setLoading(true);
     setError("");
     setResult(null);
+
+    // ★ 모의 모드: 5초 로딩 후 더미 결과 표시
+    if (useMock) {
+      const timer = setTimeout(() => {
+        if (!alive) return;
+        setResult(buildDummyResult());
+        setLoading(false);
+      }, 5000);
+      return () => { alive = false; clearTimeout(timer); };
+    }
 
     (async () => {
       // 1) 더 정확한 위치를 잠깐 기다림
