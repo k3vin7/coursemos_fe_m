@@ -8,15 +8,15 @@ export default function ProgressDock({
   className = "",
   stroke = "#FF8DB5",
   strokeWidth = 5,
-  topOffset = "15vh",
-  heartScaleY = 2.5,
-  dockHeight = 120,
+  topOffset = "10vh",
+  heartScaleY = 4,
+  dockHeight = 200,
   animMs = 800,
   gapRadius = 0,
   gapColor = "#fff",
 }) {
   const VB_W = 300;
-  const VB_H_BASE = 140;
+  const VB_H_BASE = 400;
   const B = 110;
 
   const heartTopOriginal = 38;
