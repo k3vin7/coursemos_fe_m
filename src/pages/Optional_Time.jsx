@@ -23,7 +23,7 @@ export default function Optional_Time({
       <div className="w-full max-w-md rounded-3xl bg-white shadow-xl p-5 sm:p-6 border border-slate-100">
         <div className="grid grid-cols-3 items-center text-xs font-semibold text-gray-500 mb-2">
           <div className="col-span-1">시(Hour)</div>
-          <div className="text-center">:</div>
+          <div className="text-center"></div>
           <div className="col-span-1 text-right">분(Min)</div>
         </div>
 

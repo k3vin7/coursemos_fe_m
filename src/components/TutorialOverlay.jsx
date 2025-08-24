@@ -56,24 +56,33 @@ export default function TutorialOverlay({ open, onClose }) {
     onClose?.();
   };
 
+  // ★ 부모로의 버블링을 차단해서 App.jsx 스와이프 로직이 실행되지 않도록
+  const stop = (e) => e.stopPropagation();
+
   return (
-    <div className="fixed inset-0 z-[999]">
+    <div
+      className="fixed inset-0 z-[999]"
+      style={{ touchAction: "none" }}             // ★ 브라우저 기본 제스처 억제
+      onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop}   // ★ 추가
+      onMouseDown={stop}  onMouseUp={stop}                      // ★ 추가
+      onPointerDown={stop} onPointerMove={stop} onPointerUp={stop} // ★ 추가
+    >
       {/* 반투명 배경 */}
       <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px]" />
 
-      {/* 닫기 버튼 (X) */}
+      {/* 닫기 버튼 */}
       <button
         aria-label="튜토리얼 닫기"
         onClick={handleClose}
-        className="absolute top-4 right-4 w-10 h-10 grid place-items-center
-                   rounded-full bg-white/90 border border-gray-300 shadow text-gray-700
+        className="absolute bottom-[40vh] right-20 w-auto h-10 p-2 grid place-items-center
+                   rounded-xl text-gray-700
                    hover:bg-white active:scale-95 transition"
       >
-        <span className="text-xl leading-none">×</span>
+        <span className="leading-none">닫기</span>
       </button>
 
       {/* 우상단 안내: 다음으로 이동 (→) */}
-      <div className="absolute top-16 right-6 max-w-[260px] text-right">
+      <div className="absolute top-[15vh] right-3 text-right">
         <p className="inline-block px-3 py-2 rounded-xl bg-white/90 border border-gray-200 shadow text-sm text-gray-700">
           스와이프로 <b>다음</b>으로 이동할 수 있어요!
         </p>
@@ -81,17 +90,24 @@ export default function TutorialOverlay({ open, onClose }) {
       </div>
 
       {/* 좌하단 안내: 이전으로 이동 (←) */}
-      <div className="absolute bottom-28 left-6 max-w-[260px]">
+      <div className="absolute bottom-[15vh] left-3">
         <ArrowIcon dir="left" className="mb-2" />
         <p className="inline-block px-3 py-2 rounded-xl bg-white/90 border border-gray-200 shadow text-sm text-gray-700">
           스와이프로 <b>이전</b>으로 이동할 수 있어요!
         </p>
       </div>
 
+      {/* 카피 문구 */}
+      <div className="absolute left-0 right-0 bottom-1/2 flex items-center justify-center">
+        <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/95 text-gray-700 text-xl">
+          우주와 같이 무한한 코스들을, <br/> 코스모스와 함께 만나보세요!
+        </label>
+      </div>
+
       {/* 다시 보지 않기 체크 */}
-      <div className="absolute left-0 right-0 bottom-6 flex items-center justify-center">
+      <div className="absolute left-20 bottom-[40vh] flex items-center justify-center">
         <label
-          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/95 border border-gray-200 shadow text-sm text-gray-700 cursor-pointer"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/95 text-gray-700 cursor-pointer"
         >
           <input
             type="checkbox"
