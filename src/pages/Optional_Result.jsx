@@ -4,20 +4,40 @@ import { createPortal } from "react-dom";
 
 /* ---------- 유틸 ---------- */
 const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
-const tryParseJSON = (v) => {
-  if (typeof v !== "string") return null;
-  const s = v.trim();
-  if (!s.startsWith("{") && !s.startsWith("[")) return null;
-  try { return JSON.parse(s); } catch { return null; }
+
+// 깨진 JSON 문자열 방지: 겉모습만 JSON 같아도 아주 느슨하게 필터
+const looksLikeJSON = (s) => {
+  if (typeof s !== "string") return false;
+  const t = s.trim();
+  if (!t) return false;
+  const first = t[0], last = t[t.length - 1];
+  const pairOK = (first === "{" && last === "}") || (first === "[" && last === "]");
+  // 너무 짧으면 시도하지 않음
+  return pairOK && t.length > 1;
 };
+
+const tryParseJSON = (v) => {
+  try {
+    if (!looksLikeJSON(v)) return null;
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+};
+
 const splitBullets = (v) => {
   if (typeof v !== "string") return [];
-  const lines = v
-    .split(/\r?\n+/)
-    .map((x) => x.replace(/^\s*[-•*\d.)]+\s*/, "").trim())
-    .filter((x) => x.length > 0);
-  return lines.length >= 2 ? lines : [];
+  try {
+    const lines = v
+      .split(/\r?\n+/)
+      .map((x) => x.replace(/^\s*[-•*\d.)]+\s*/, "").trim())
+      .filter((x) => x.length > 0);
+    return lines.length >= 2 ? lines : [];
+  } catch {
+    return [];
+  }
 };
+
 const truncate = (s, n = 160) =>
   !s ? "" : s.length > n ? s.slice(0, n - 1) + "…" : s;
 
@@ -32,6 +52,11 @@ const minutesToLabel = (min) => {
   return `${m}분`;
 };
 
+// 예상치 못한 값에도 안전한 탐색
+const isPlainObject = (o) =>
+  !!o && typeof o === "object" && (o.constructor === Object || Object.getPrototypeOf(o) === null);
+const safeArray = (x) => (Array.isArray(x) ? x : []);
+
 const deepCollectArrays = (obj) => {
   const arrays = [];
   const seen = new Set();
@@ -40,10 +65,14 @@ const deepCollectArrays = (obj) => {
     const cur = queue.shift();
     if (cur && typeof cur === "object" && !seen.has(cur)) {
       seen.add(cur);
-      for (const [k, v] of Object.entries(cur)) {
-        if (k.startsWith("_")) continue; // 메타키 무시
-        if (Array.isArray(v) && v.length > 0) arrays.push([k, v]);
-        else if (v && typeof v === "object") queue.push(v);
+      try {
+        for (const [k, v] of Object.entries(cur)) {
+          if (String(k).startsWith("_")) continue; // 메타키 무시
+          if (Array.isArray(v) && v.length > 0) arrays.push([k, v]);
+          else if (v && typeof v === "object") queue.push(v);
+        }
+      } catch {
+        /* skip malformed objects */
       }
     }
   }
@@ -51,68 +80,80 @@ const deepCollectArrays = (obj) => {
 };
 
 /* ---------- 키 매핑 & 정규화 ---------- */
-// 다국어/다형 스키마 지원을 위한 안전한 getter
 const getAny = (o, keys = []) => {
-  for (const k of keys) {
-    if (k in o && isNonEmpty(o[k])) return o[k];
-  }
+  try {
+    for (const k of keys) {
+      if (o && k in o && isNonEmpty(o[k])) return o[k];
+    }
+  } catch {}
   return undefined;
 };
 
 // 장소(스톱) 정규화
 function normalizeStop(stopRaw = {}) {
-  const name = getAny(stopRaw, ["name", "장소명", "place", "title", "label"]);
-  const desc = getAny(stopRaw, ["desc", "description", "설명", "summary", "explain", "text"]);
-  const category = getAny(stopRaw, ["category", "카테고리", "type"]);
-  const suggested_time_of_day = getAny(stopRaw, ["suggested_time_of_day", "권장시간대", "time_of_day"]);
-  const photo_url = getAny(stopRaw, ["photo_url", "image_url", "image", "img", "thumbnail"]);
-  const durationLike = getAny(stopRaw, [
-    "typical_duration_min",
-    "duration_min",
-    "권장체류시간",
-    "stay_minutes",
-    "duration",
-  ]);
-  const typical_duration_min = isNonEmpty(durationLike) ? Number(durationLike) : undefined;
+  try {
+    const name = getAny(stopRaw, ["name", "장소명", "place", "title", "label"]);
+    const desc = getAny(stopRaw, ["desc", "description", "설명", "summary", "explain", "text"]);
+    const category = getAny(stopRaw, ["category", "카테고리", "type"]);
+    const suggested_time_of_day = getAny(stopRaw, ["suggested_time_of_day", "권장시간대", "time_of_day"]);
+    const photo_url = getAny(stopRaw, ["photo_url", "image_url", "image", "img", "thumbnail"]);
+    const durationLike = getAny(stopRaw, [
+      "typical_duration_min",
+      "duration_min",
+      "권장체류시간",
+      "stay_minutes",
+      "duration",
+    ]);
+    const typical_duration_min = isNonEmpty(durationLike) ? Number(durationLike) : undefined;
 
-  return {
-    name: isNonEmpty(name) ? String(name) : "",
-    desc: isNonEmpty(desc) ? String(desc) : "",
-    category: isNonEmpty(category) ? String(category) : "",
-    suggested_time_of_day: isNonEmpty(suggested_time_of_day) ? String(suggested_time_of_day) : "",
-    photo_url: isNonEmpty(photo_url) ? String(photo_url) : "",
-    typical_duration_min: Number.isFinite(typical_duration_min) ? typical_duration_min : undefined,
-    _original: stopRaw, // ← 추가 정보 표시용으로 원본 보관
-  };
+    return {
+      name: isNonEmpty(name) ? String(name) : "",
+      desc: isNonEmpty(desc) ? String(desc) : "",
+      category: isNonEmpty(category) ? String(category) : "",
+      suggested_time_of_day: isNonEmpty(suggested_time_of_day) ? String(suggested_time_of_day) : "",
+      photo_url: isNonEmpty(photo_url) ? String(photo_url) : "",
+      typical_duration_min: Number.isFinite(typical_duration_min) ? typical_duration_min : undefined,
+      _original: stopRaw, // 원본 보관
+    };
+  } catch {
+    return { name: "", desc: "", category: "", suggested_time_of_day: "", photo_url: "", _original: stopRaw };
+  }
 }
 
 // 코스 정규화
 function normalizeCourse(courseRaw = {}, idx = 0) {
-  // stops / 스톱
-  const stopsArr =
-    getAny(courseRaw, ["stops", "스톱", "Stops"]) ||
-    getAny(courseRaw, ["스탑"]) || // 혹시 다른 표기
-    [];
+  try {
+    const stopsArr =
+      getAny(courseRaw, ["stops", "스톱", "Stops"]) ||
+      getAny(courseRaw, ["스탑"]) ||
+      [];
+    const stops = safeArray(stopsArr).map((s) => normalizeStop(s));
 
-  const stops = Array.isArray(stopsArr) ? stopsArr.map((s) => normalizeStop(s)) : [];
+    const minutesLike =
+      getAny(courseRaw, ["total_estimated_minutes", "총예상소요시간", "duration_min"]) ??
+      (stops.some((s) => isNonEmpty(s.typical_duration_min))
+        ? stops.reduce((acc, s) => acc + (s.typical_duration_min || 0), 0)
+        : undefined);
 
-  // 총 시간
-  const minutesLike =
-    getAny(courseRaw, ["total_estimated_minutes", "총예상소요시간", "duration_min"]) ??
-    (stops.some((s) => isNonEmpty(s.typical_duration_min))
-      ? stops.reduce((acc, s) => acc + (s.typical_duration_min || 0), 0)
-      : undefined);
+    const title =
+      getAny(courseRaw, ["title", "name", "코스명", "course", "label"]) || `코스 ${idx + 1}`;
 
-  // 타이틀
-  const title = getAny(courseRaw, ["title", "name", "코스명", "course", "label"]) || `코스 ${idx + 1}`;
-
-  return {
-    id: getAny(courseRaw, ["id", "_id"]) ?? `course-${idx}`,
-    title: String(title),
-    total_estimated_minutes: Number.isFinite(Number(minutesLike)) ? Number(minutesLike) : undefined,
-    stops,
-    _original: courseRaw, // 원본 보관
-  };
+    return {
+      id: getAny(courseRaw, ["id", "_id"]) ?? `course-${idx}`,
+      title: String(title),
+      total_estimated_minutes: Number.isFinite(Number(minutesLike)) ? Number(minutesLike) : undefined,
+      stops,
+      _original: courseRaw,
+    };
+  } catch {
+    return {
+      id: `course-${idx}`,
+      title: `코스 ${idx + 1}`,
+      total_estimated_minutes: undefined,
+      stops: [],
+      _original: courseRaw,
+    };
+  }
 }
 
 /* ---------- 카드/섹션 생성 ---------- */
@@ -128,162 +169,187 @@ const toCardFromString = (s, i, tag) => ({
 });
 
 const toCardFromObj = (o, i, tag) => ({
-  id: o.id ?? o._id ?? i,
+  id: o?.id ?? o?._id ?? i,
   title:
-    o.title ?? o.name ?? o.place ?? o.course ?? o.heading ?? o.label ?? `추천 항목 ${i + 1}`,
+    o?.title ?? o?.name ?? o?.place ?? o?.course ?? o?.heading ?? o?.label ?? `추천 항목 ${i + 1}`,
   subtitle:
-    o.subtitle ?? o.address ?? o.location ?? o.zone ?? o.area ?? o.category ?? "",
+    o?.subtitle ?? o?.address ?? o?.location ?? o?.zone ?? o?.area ?? o?.category ?? "",
   description:
-    o.description ?? o.desc ?? o.summary ?? o.details ?? o.explain ?? o.text ?? "",
-  image: o.image || o.image_url || o.img || o.thumbnail || "",
-  link: o.url || o.link || o.href || "",
-  tags: o.tags || o.keywords || o.hashtags || (tag ? [tag] : []),
+    o?.description ?? o?.desc ?? o?.summary ?? o?.details ?? o?.explain ?? o?.text ?? "",
+  image: o?.image || o?.image_url || o?.img || o?.thumbnail || "",
+  link: o?.url || o?.link || o?.href || "",
+  tags: o?.tags || o?.keywords || o?.hashtags || (tag ? [tag] : []),
   raw: o,
 });
 
 // 코스 → 카드
 const toCourseCard = (normCourse, i, groupTag = "courses") => {
-  const firstImg = normCourse.stops.find((s) => s.photo_url)?.photo_url || "";
-  const names = normCourse.stops.map((s) => s.name).filter(Boolean);
-  const cats = Array.from(new Set(normCourse.stops.map((s) => s.category).filter(Boolean)));
-  const tods = Array.from(
-    new Set(normCourse.stops.map((s) => s.suggested_time_of_day).filter(Boolean))
-  );
+  try {
+    const firstImg = (normCourse.stops || []).find((s) => s.photo_url)?.photo_url || "";
+    const names = safeArray(normCourse.stops).map((s) => s.name).filter(Boolean);
+    const cats = Array.from(new Set(safeArray(normCourse.stops).map((s) => s.category).filter(Boolean)));
+    const tods = Array.from(
+      new Set(safeArray(normCourse.stops).map((s) => s.suggested_time_of_day).filter(Boolean))
+    );
 
-  return {
-    id: normCourse.id ?? `${groupTag}-${i}`,
-    title: normCourse.title ?? `코스 ${i + 1}`,
-    subtitle: [
-      normCourse.total_estimated_minutes ? minutesToLabel(normCourse.total_estimated_minutes) : "",
-      `${normCourse.stops.length}곳`,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-    description: names.slice(0, 6).join(" → "),
-    image: firstImg,
-    link: "",
-    tags: [...cats.slice(0, 3), ...tods.slice(0, 2)],
-    raw: normCourse, // ← 모달에서 바로 사용
-  };
+    return {
+      id: normCourse.id ?? `${groupTag}-${i}`,
+      title: normCourse.title ?? `코스 ${i + 1}`,
+      subtitle: [
+        isNonEmpty(normCourse.total_estimated_minutes) ? minutesToLabel(normCourse.total_estimated_minutes) : "",
+        `${safeArray(normCourse.stops).length}곳`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      description: names.slice(0, 6).join(" → "),
+      image: firstImg,
+      link: "",
+      tags: [...cats.slice(0, 3), ...tods.slice(0, 2)],
+      raw: normCourse,
+    };
+  } catch {
+    return {
+      id: `${groupTag}-${i}`,
+      title: `코스 ${i + 1}`,
+      subtitle: "",
+      description: "",
+      image: "",
+      link: "",
+      tags: [],
+      raw: normCourse,
+    };
+  }
 };
 
-// 입력에서 코스 그룹 추출
+// 입력에서 코스 그룹 추출 (오류 내면 바로 빈배열로)
 function extractCourseGroups(input) {
-  // 반환: [{ title, cards }, ...]
-  let data = input;
-  const parsed = tryParseJSON(data);
-  if (parsed) data = parsed;
+  try {
+    let data = input;
+    const parsed = tryParseJSON(data);
+    if (parsed) data = parsed;
 
-  const groups = [];
+    const groups = [];
 
-  // 배열이 곧 코스 리스트인지?
-  const isCourseArray = (arr) =>
-    Array.isArray(arr) && arr.length > 0 && arr.every((c) => {
-      const s = getAny(c || {}, ["stops", "스톱", "Stops", "스탑"]);
-      return Array.isArray(s);
-    });
+    const isCourseArray = (arr) =>
+      Array.isArray(arr) &&
+      arr.length > 0 &&
+      arr.every((c) => {
+        try {
+          const s = getAny(c || {}, ["stops", "스톱", "Stops", "스탑"]);
+          return Array.isArray(s);
+        } catch {
+          return false;
+        }
+      });
 
-  if (Array.isArray(data) && isCourseArray(data)) {
-    const cards = data.map((c, i) => toCourseCard(normalizeCourse(c, i), i, "courses"));
-    groups.push({ title: "코스", cards });
-    return groups;
-  }
-
-  if (data && typeof data === "object") {
-    // 우선순위: top-level "courses"
-    if (isCourseArray(data.courses)) {
-      const cards = data.courses.map((c, i) =>
-        toCourseCard(normalizeCourse(c, i), i, "courses")
-      );
+    if (Array.isArray(data) && isCourseArray(data)) {
+      const cards = data.map((c, i) => toCourseCard(normalizeCourse(c, i), i, "courses"));
       groups.push({ title: "코스", cards });
+      return groups;
     }
 
-    // 기타 키들 중 코스 배열
-    for (const [key, arr] of Object.entries(data)) {
-      if (key === "courses") continue;
-      if (isCourseArray(arr)) {
-        const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, key));
-        groups.push({ title: key, cards });
+    if (isPlainObject(data)) {
+      if (isCourseArray(data.courses)) {
+        const cards = data.courses.map((c, i) =>
+          toCourseCard(normalizeCourse(c, i), i, "courses")
+        );
+        groups.push({ title: "코스", cards });
       }
-    }
 
-    // 중첩 탐색(첫 배열만)
-    if (groups.length === 0) {
-      const arrays = deepCollectArrays(data);
-      for (const [tag, arr] of arrays) {
+      for (const [key, arr] of Object.entries(data)) {
+        if (key === "courses") continue;
         if (isCourseArray(arr)) {
-          const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, tag));
-          groups.push({ title: tag, cards });
-          break;
+          const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, key));
+          groups.push({ title: key, cards });
+        }
+      }
+
+      if (groups.length === 0) {
+        const arrays = deepCollectArrays(data);
+        for (const [tag, arr] of arrays) {
+          if (isCourseArray(arr)) {
+            const cards = arr.map((c, i) => toCourseCard(normalizeCourse(c, i), i, tag));
+            groups.push({ title: tag, cards });
+            break;
+          }
         }
       }
     }
-  }
 
-  return groups;
+    return groups;
+  } catch {
+    return [];
+  }
 }
 
 /* ---------- 범용(백업) 카드 ---------- */
 function normalizeGeneric(input) {
-  let result = input;
-  const parsed = tryParseJSON(result);
-  if (parsed) result = parsed;
+  try {
+    let result = input;
+    const parsed = tryParseJSON(result);
+    if (parsed) result = parsed;
 
-  if (Array.isArray(result)) {
-    if (result.every((x) => typeof x === "string"))
-      return result.map((s, i) => toCardFromString(s, i));
-    return result.map((x, i) =>
-      typeof x === "string" ? toCardFromString(x, i) : toCardFromObj(x, i)
-    );
-  }
-
-  if (result && typeof result === "object") {
-    const common = ["places", "results", "items", "data", "courses", "list", "entries", "suggestions", "options"];
-    for (const key of common) {
-      const v = result[key];
-      if (Array.isArray(v) && v.length > 0) {
-        if (v.every((x) => typeof x === "string"))
-          return v.map((s, i) => toCardFromString(s, i, key));
-        return v.map((o, i) => toCardFromObj(o, i, key));
-      }
-    }
-    const found = deepCollectArrays(result);
-    if (found.length) {
-      const [tag, arr] = found[0];
-      if (arr.every((x) => typeof x === "string"))
-        return arr.map((s, i) => toCardFromString(s, i, tag));
-      return arr.map((o, i) => toCardFromObj(o, i, tag));
-    }
-
-    if ("name" in result || "title" in result) return [toCardFromObj(result, 0)];
-
-    const stringPairs = Object.entries(result).filter(
-      ([, v]) => typeof v === "string" && v.trim().length > 0
-    );
-    if (stringPairs.length)
-      return stringPairs.map(([k, v], i) =>
-        toCardFromObj({ title: k, description: v }, i, "fields")
+    if (Array.isArray(result)) {
+      if (result.every((x) => typeof x === "string"))
+        return result.map((s, i) => toCardFromString(s, i));
+      return result.map((x, i) =>
+        typeof x === "string" ? toCardFromString(x, i) : toCardFromObj(x, i)
       );
-  }
+    }
 
-  if (typeof result === "string") {
-    const bullets = splitBullets(result);
-    if (bullets.length) return bullets.map((s, i) => toCardFromString(s, i));
-    return [toCardFromString(result, 0)];
-  }
+    if (isPlainObject(result)) {
+      const common = ["places", "results", "items", "data", "courses", "list", "entries", "suggestions", "options"];
+      for (const key of common) {
+        const v = result[key];
+        if (Array.isArray(v) && v.length > 0) {
+          if (v.every((x) => typeof x === "string"))
+            return v.map((s, i) => toCardFromString(s, i, key));
+          return v.map((o, i) => toCardFromObj(o, i, key));
+        }
+      }
+      const found = deepCollectArrays(result);
+      if (found.length) {
+        const [tag, arr] = found[0];
+        if (arr.every((x) => typeof x === "string"))
+          return arr.map((s, i) => toCardFromString(s, i, tag));
+        return arr.map((o, i) => toCardFromObj(o, i, tag));
+      }
 
-  return [];
+      if ("name" in result || "title" in result) return [toCardFromObj(result, 0)];
+
+      const stringPairs = Object.entries(result).filter(
+        ([, v]) => typeof v === "string" && v.trim().length > 0
+      );
+      if (stringPairs.length)
+        return stringPairs.map(([k, v], i) =>
+          toCardFromObj({ title: k, description: v }, i, "fields")
+        );
+    }
+
+    if (typeof result === "string") {
+      const bullets = splitBullets(result);
+      if (bullets.length) return bullets.map((s, i) => toCardFromString(s, i));
+      return [toCardFromString(result, 0)];
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 /* ---------- 상세 모달 ---------- */
 function KeyValueList({ obj, omit = [] }) {
   if (!obj || typeof obj !== "object") return null;
-  const entries = Object.entries(obj).filter(([k, v]) => !omit.includes(k) && isNonEmpty(v));
+  let entries = [];
+  try {
+    entries = Object.entries(obj).filter(([k, v]) => !omit.includes(k) && isNonEmpty(v));
+  } catch {}
   if (!entries.length) return null;
   return (
     <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
       {entries.map(([k, v]) => (
-        <FragmentKV key={k} k={k} v={v} />
+        <FragmentKV key={String(k)} k={k} v={v} />
       ))}
     </dl>
   );
@@ -291,7 +357,7 @@ function KeyValueList({ obj, omit = [] }) {
 function FragmentKV({ k, v }) {
   return (
     <>
-      <dt className="text-gray-500">{k}</dt>
+      <dt className="text-gray-500">{String(k)}</dt>
       <dd className="text-gray-800 break-words whitespace-pre-wrap">{String(v)}</dd>
     </>
   );
@@ -365,6 +431,7 @@ function CourseDetailModal({ open, course, onClose }) {
                             className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
                             loading="lazy"
                             referrerPolicy="no-referrer"
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
                           />
                         ) : (
                           <div className="w-16 h-16 rounded-xl bg-gray-100 grid place-items-center flex-shrink-0">
@@ -443,10 +510,20 @@ export default function Optional_Result({
   const [selected, setSelected] = useState(null);
 
   const { courseGroups, fallbackCards } = useMemo(() => {
-    const groups = extractCourseGroups(result);
-    if (groups.length > 0) return { courseGroups: groups, fallbackCards: [] };
-    return { courseGroups: [], fallbackCards: normalizeGeneric(result) };
+    try {
+      const groups = extractCourseGroups(result);
+      if (groups.length > 0) return { courseGroups: groups, fallbackCards: [] };
+      return { courseGroups: [], fallbackCards: normalizeGeneric(result) };
+    } catch {
+      return { courseGroups: [], fallbackCards: [] };
+    }
   }, [result]);
+
+  // 서버가 { detail: "..."} 형태만 보낸 경우도 안전하게 노출
+  const serverDetail =
+    !loading && !error && isPlainObject(result) && isNonEmpty(result?.detail)
+      ? String(result.detail)
+      : "";
 
   return (
     <div className="h-screen w-screen overflow-y-auto px-4 py-6">
@@ -479,6 +556,12 @@ export default function Optional_Result({
           </div>
         )}
 
+        {!loading && !error && serverDetail && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4 mb-4">
+            {serverDetail}
+          </div>
+        )}
+
         {/* 코스 섹션 */}
         {!loading && !error && courseGroups.length > 0 && (
           <div className="space-y-8">
@@ -488,7 +571,7 @@ export default function Optional_Result({
                   <h2 className="text-lg font-semibold mb-3">{g.title}</h2>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {g.cards.map((c, i) => (
+                  {safeArray(g.cards).map((c, i) => (
                     <article
                       key={c.id ?? i}
                       role="button"
@@ -502,6 +585,7 @@ export default function Optional_Result({
                           className="w-full h-44 object-cover"
                           referrerPolicy="no-referrer"
                           loading="lazy"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       ) : (
                         <div className="w-full h-44 bg-gradient-to-b from-rose-50 to-white flex items-center justify-center">
@@ -548,9 +632,9 @@ export default function Optional_Result({
         )}
 
         {/* 코스가 없을 때: 범용 카드 */}
-        {!loading && !error && courseGroups.length === 0 && fallbackCards.length > 0 && (
+        {!loading && !error && courseGroups.length === 0 && safeArray(fallbackCards).length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {fallbackCards.map((c, i) => (
+            {safeArray(fallbackCards).map((c, i) => (
               <article
                 key={c.id ?? i}
                 className="group rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-white hover:shadow-lg transition"
@@ -562,6 +646,7 @@ export default function Optional_Result({
                     className="w-full h-44 object-cover"
                     referrerPolicy="no-referrer"
                     loading="lazy"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
                   />
                 ) : (
                   <div className="w-full h-44 bg-gradient-to-b from-rose-50 to-white flex items-center justify-center">
@@ -595,7 +680,7 @@ export default function Optional_Result({
           </div>
         )}
 
-        {!loading && !error && courseGroups.length === 0 && (!fallbackCards || fallbackCards.length === 0) && (
+        {!loading && !error && courseGroups.length === 0 && (!fallbackCards || safeArray(fallbackCards).length === 0) && (
           <div className="text-gray-500">표시할 결과가 없어요.</div>
         )}
       </div>
