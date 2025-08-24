@@ -7,7 +7,7 @@ export default function ProgressDock({
   current = 1,
   className = "",
   stroke = "#FF8DB5",
-  strokeWidth = 5,
+  strokeWidth = 10,
   topOffset = "10vh",
   heartScaleY = 4,
   dockHeight = 200,
