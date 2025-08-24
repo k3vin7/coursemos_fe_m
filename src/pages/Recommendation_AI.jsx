@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { postRecommend } from "../api/recommend.js";
 import { reverseGeocode } from "../components/reverseGeocode.js";
 import { loadNaverMaps } from "../components/naverLoader.jsx";
+import LoadingOverlay from "../components/LoadingOverlay.jsx";
 
 /* ---------- 공통 유틸 ---------- */
 const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
@@ -598,6 +599,17 @@ export default function Recommendation_AI({ onPrev, onNext }) {
 
       {/* 상세 모달 */}
       <CourseDetailModal open={!!selected} course={selected} onClose={() => setSelected(null)} />
+        <LoadingOverlay
+          open={loading}
+          hints={[
+            "오늘은 날씨가 좋네요! ☀️",
+            "근처 분위기를 파악하는 중…",
+            "사람 덜 붐비는 곳을 찾는 중…",
+            "사진이 예쁜 스팟을 고르는 중…",
+            "이동 동선을 최적화하는 중…",
+          ]}
+        />
     </div>
+
   );
 }

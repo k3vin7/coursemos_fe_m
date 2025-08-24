@@ -9,7 +9,7 @@ export default function ProgressDock({
   heartScaleY = 4,
   dockHeight = 200,
   gapRadius = 8,
-  animMs = 1000,
+  animMs = 500,
 }) {
   const VB_W = 300;
   const VB_H_BASE = 400;
