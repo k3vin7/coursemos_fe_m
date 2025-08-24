@@ -134,7 +134,7 @@ export default function Intro({
       {/* 오른쪽 스와이프 안내 */}
       <div className="absolute flex flex-col items-end top-[15vh] right-0 z-20">
         <div className="flex items-center justify-center">
-          <p className="mr-3 font-semibold text-gray-500">추천 데이트 코스는 여기!!</p>
+          <p className="mr-3 font-semibold text-gray-500">간단한 정보 입력으로 맞춤 코스 추천!</p>
           <img src="/RightArrow.png" alt="오른쪽스와이프"
           className="pr-4"/>
         </div>
@@ -150,7 +150,7 @@ export default function Intro({
         <div className="flex items-center justify-center">
            <img src="/LeftArrow.png" alt="왼쪽스와이프"
            className="pl-4"/>
-           <p className="ml-3 font-semibold text-gray-500">간단한 정보 입력으로 맞춤 코스 추천!</p>
+           <p className="ml-3 font-semibold text-gray-500">추천 데이트 코스는 여기!!</p>
         </div>
       </div>
     </div>
