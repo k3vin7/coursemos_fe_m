@@ -501,7 +501,7 @@ function CourseDetailModal({ open, course, onClose }) {
 }
 
 /* ---------- 개발용 더미 + 모의 모드 ---------- */
-const USE_MOCK = false; // 항상 모의 테스트하려면 true
+const USE_MOCK = true; // 항상 모의 테스트하려면 true
 function buildDummyResult() {
   return {
     courses: [
