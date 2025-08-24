@@ -15,6 +15,19 @@ AI 기반 데이트 코스 추천 서비스
 
 ---
 
+## 🛠️ 기술 스택
+
+| 분류         | 사용 기술                                      |
+| ------------ | ---------------------------------------------- |
+| 프론트엔드   | React, Vite, TailwindCSS, Framer Motion        |
+| 지도         | 네이버 지도 SDK                                |
+| 상태관리     | React Hooks (useState, useEffect 등)           |
+| 스타일링     | TailwindCSS                                    |
+| 애니메이션   | Framer Motion                                  |
+| 기타         | Axios, ESLint, Prettier                        |
+
+---
+
 ## 🖥️ 개발 환경
 
 - React + Vite
