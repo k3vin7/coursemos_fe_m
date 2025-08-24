@@ -64,6 +64,7 @@ export default function App() {
   const [authed, setAuthed] = useState(isLoggedIn());
   const [authOpen, setAuthOpen] = useState(!isLoggedIn());
   const [myOpen, setMyOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false); 
 
   const [weatherText, setWeatherText] = useState(
     () => localStorage.getItem("LAST_WEATHER_TEXT") || ""
@@ -104,7 +105,7 @@ export default function App() {
 
   // ===== 제스처(모달 열려있으면 무시) =====
   const onTouchStart = (e) => {
-    if (authOpen || myOpen) return;
+    if (authOpen || myOpen || mapOpen) return;
     const t = e.touches?.[0];
     if (!t) return;
     startXRef.current = t.clientX;
@@ -112,7 +113,7 @@ export default function App() {
   };
 
   const onTouchEnd = (e) => {
-    if (authOpen || myOpen) return;
+    if (authOpen || myOpen || mapOpen) return;
     if (animatingRef.current) return;
     const t = e.changedTouches?.[0];
     if (!t) return;
@@ -125,20 +126,20 @@ export default function App() {
   };
 
   const onMouseDown = (e) => {
-    if (authOpen || myOpen) return;
+    if (authOpen || myOpen || mapOpen) return;
     isMouseDownRef.current = true;
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
   };
 
   const onMouseUp = (e) => {
-    if (authOpen || myOpen) return;
+    if (authOpen || myOpen || mapOpen) return;
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
     if (animatingRef.current) return;
     const dx = e.clientX - startXRef.current;
     const dy = e.clientY - startYRef.current;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 80) {
       if (dx < 0) go(index + 1, "left");
       else        go(index - 1, "right");
     }
@@ -259,6 +260,8 @@ export default function App() {
               onChange={setPlace}
               onNext={() => go(5, "left")}
               onPrev={() => go(3, "right")}
+              mapOpen={mapOpen} 
+              setMapOpen={setMapOpen}
             />
           </PageSlide>
         );

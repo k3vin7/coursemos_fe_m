@@ -1,68 +1,129 @@
 import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
+
+let __EVER_REVEALED__ = { left: false, heartL: false, heartR: false, right: false };
 
 export default function ProgressDock({
-  current = 1,                 // 1=date, 2=time, 3=place, 4=etc
+  current = 1,
   className = "",
-  stroke = "#FFA3C4",
-  strokeWidth = 8,
-  topOffset = "15vh",          // 진행 바 세로 위치
-  animMs = 500,                // 그려지는 시간(ms)
+  stroke = "#FF8DB5",
+  strokeWidth = 5,
+  topOffset = "15vh",
+  heartScaleY = 2.5,
+  dockHeight = 120,
+  animMs = 800,
+  gapRadius = 0,
+  gapColor = "#fff",
 }) {
-  // 좌표/형상 ------------------------------------------------------------
-  const VB_W = 300, VB_H = 160;
-  const BASE_Y = 110;          // 선분/하트 바닥 y(둘이 만나는 기준선)
-  const PADDING_X = 20;
+  const VB_W = 300;
+  const VB_H_BASE = 140;
+  const B = 110;
 
-  // 하트 아랫부분이 "살짝 벌어진" 느낌을 위해 중앙에서 footGap만큼 좌우로 띄움
-  const footGap = 28;          // ← 숫자 키우면 벌어짐 증가
-  const footL = { x: 150 - footGap, y: BASE_Y };
-  const footR = { x: 150 + footGap, y: BASE_Y };
+  const heartTopOriginal = 38;
+  const heartBottomOriginal = 112;
+  const dy = B - heartBottomOriginal; // -2
 
-  // 하트 상단 골 위치(위로 갈수록 값 감소). 더 위로 올리고 싶으면 줄이면 됨.
-  const tipY = 44;
+  const scaledTop = B + ((heartTopOriginal + dy) - B) * heartScaleY;
+  const minY = Math.min(0, Math.floor(scaledTop) - 8);
+  const VB_H = VB_H_BASE - minY;
 
-  // 부드러운 곡률용 컨트롤 포인트(좌우 대칭)
-  // - 첫 곡선은 바닥에서 살짝 옆/위로 빠져나오고,
-  // - 두 번째 곡선이 상단 골로 자연스럽게 연결되도록 잡음.
-  const PATH_HEART_L = [
-    `M ${footL.x},${footL.y}`,
-    `C ${footL.x - 18},${BASE_Y - 10}  ${footL.x - 30},${BASE_Y - 44}  ${150 - 22},${(tipY + BASE_Y) / 2}`,
-    `C ${150 - 14},${tipY + 8}  ${150 - 8},${tipY + 2}  150,${tipY}`,
-  ].join(" ");
+  const leftLine  = { x1: 0,  x2: 130, y: B };
+  const rightLine = { x1: 190, x2: 320, y: B };
 
-  const PATH_HEART_R = [
-    `M ${footR.x},${footR.y}`,
-    `C ${footR.x + 18},${BASE_Y - 10}  ${footR.x + 30},${BASE_Y - 44}  ${150 + 22},${(tipY + BASE_Y) / 2}`,
-    `C ${150 + 14},${tipY + 8}  ${150 + 8},${tipY + 2}  150,${tipY}`,
-  ].join(" ");
-
-  const LEFT_LINE_D  = `M ${PADDING_X},${BASE_Y} L ${footL.x},${BASE_Y}`;
-  const RIGHT_LINE_D = `M ${footR.x},${BASE_Y} L ${VB_W - PADDING_X},${BASE_Y}`;
-
-  // 누적 노출 -----------------------------------------------------------
   const showLeftLine  = current >= 1;
   const showHeartL    = current >= 2;
   const showHeartR    = current >= 3;
   const showRightLine = current >= 4;
 
-  // 이번에 "방금 켜진" 세그먼트만 그려지는 애니메이션 적용
-  const animLeftLine  = current === 1;
-  const animHeartL    = current === 2;
-  const animHeartR    = current === 3;
-  const animRightLine = current === 4;
+  // 🔧 시작점을 바닥보다 살짝 올려서(갭 원에 안 가리도록) 부드럽게 시작
+  const startLiftLocal = (gapRadius + strokeWidth * 0.6) / heartScaleY; // local 좌표계에서 올릴 값
+  const yStart = (112 + dy) - startLiftLocal; // = B - startLiftLocal
 
-  // 공통 스타일: pathLength=100 기준으로 dash 애니
-  const segStyle = {
-    vectorEffect: "non-scaling-stroke",
-    stroke,
-    strokeWidth,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    fill: "none",
-    pathLength: 100,
-    strokeDasharray: 100,
-  };
-  const animClass = "animate-draw";
+  const heartLeftPathD = `
+    M150,${yStart}
+    C114,${94+dy} 92,${82+dy} 92,${63+dy}
+    C92,${50+dy} 101,${38+dy} 119,${38+dy}
+    C136,${38+dy} 150,${52+dy} 150,${76+dy}
+  `;
+  const heartRightPathD = `
+    M150,${yStart}
+    C186,${94+dy} 208,${82+dy} 208,${63+dy}
+    C208,${50+dy} 199,${38+dy} 181,${38+dy}
+    C164,${38+dy} 150,${52+dy} 150,${76+dy}
+  `;
+
+  const [ever, setEver] = useState(() => ({ ...__EVER_REVEALED__ }));
+  const animLeft  = showLeftLine  && !ever.left;
+  const animHL    = showHeartL    && !ever.heartL;
+  const animHR    = showHeartR    && !ever.heartR;
+  const animRight = showRightLine && !ever.right;
+
+  useEffect(() => {
+    const next = { ...ever };
+    if (showLeftLine)  next.left   = true;
+    if (showHeartL)    next.heartL = true;
+    if (showHeartR)    next.heartR = true;
+    if (showRightLine) next.right  = true;
+    if (next.left !== ever.left || next.heartL !== ever.heartL || next.heartR !== ever.heartR || next.right !== ever.right) {
+      setEver(next);
+      __EVER_REVEALED__ = next;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, showLeftLine, showHeartL, showHeartR, showRightLine]);
+
+  // 🧩 길이+패딩으로 "끝이 덜 채워지는" 현상 제거
+  function useDrawOnFirstReveal(ref, shouldAnimate, duration, pad = 0) {
+    useEffect(() => {
+      const el = ref.current;
+      if (!el || !shouldAnimate) return;
+
+      let len = 0;
+      try {
+        if (el.tagName === "LINE") {
+          const x1 = Number(el.getAttribute("x1"));
+          const y1 = Number(el.getAttribute("y1"));
+          const x2 = Number(el.getAttribute("x2"));
+          const y2 = Number(el.getAttribute("y2"));
+          len = Math.hypot(x2 - x1, y2 - y1);
+        } else if ("getTotalLength" in el) {
+          len = el.getTotalLength();
+        } else {
+          len = 600;
+        }
+      } catch { len = 600; }
+
+      const L = len + pad; // 패딩 추가
+      el.style.strokeDasharray = String(L);
+      el.style.strokeDashoffset = String(L);
+      el.style.willChange = "stroke-dashoffset";
+      el.style.transition = "none";
+      el.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        el.style.transition = `stroke-dashoffset ${duration}ms ease-out`;
+        el.style.strokeDashoffset = "0";
+      });
+      const clear = () => {
+        el.style.transition = "";
+        el.style.willChange = "";
+      };
+      el.addEventListener("transitionend", clear, { once: true });
+      return () => el.removeEventListener("transitionend", clear);
+    }, [ref, shouldAnimate, duration, pad]);
+  }
+
+  const refLeft  = useRef(null);
+  const refHL    = useRef(null);
+  const refHR    = useRef(null);
+  const refRight = useRef(null);
+
+  // 선은 적당한 패딩, 하트는 스케일 고려해서 더 큰 패딩
+  const padLine  = Math.max(4, strokeWidth * 2);
+  const padHeart = Math.max(6, strokeWidth * 3) * Math.max(1, heartScaleY * 0.9);
+
+  useDrawOnFirstReveal(refLeft,  animLeft,  Math.max(200, animMs * 0.7), padLine);
+  useDrawOnFirstReveal(refHL,    animHL,    animMs,                       padHeart);
+  useDrawOnFirstReveal(refHR,    animHR,    animMs,                       padHeart);
+  useDrawOnFirstReveal(refRight, animRight, Math.max(200, animMs * 0.7), padLine);
 
   return createPortal(
     <div
@@ -70,59 +131,74 @@ export default function ProgressDock({
       style={{ top: topOffset, padding: "0 16px" }}
       aria-hidden
     >
-      {/* 그려지는 애니메이션 키프레임 */}
       <style>{`
-        @keyframes draw {
-          from { stroke-dashoffset: 100; }
-          to   { stroke-dashoffset: 0; }
+        .smooth-stroke {
+          vector-effect: non-scaling-stroke;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          shape-rendering: geometricPrecision;
         }
-        .${animClass} { animation: draw ${animMs}ms ease-out forwards; }
       `}</style>
 
       <div className="mx-auto max-w-[720px]">
         <svg
-          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          viewBox={`0 ${minY} ${VB_W} ${VB_H}`}
           width="100%"
-          height="96"
+          height={dockHeight}
           preserveAspectRatio="none"
         >
-          {/* 1) 왼쪽 선분 */}
+          {/* 1: 왼쪽 선분 */}
           {showLeftLine && (
-            <path
-              key={`L-${current}`}                 // 단계 바뀔 때 재마운트 → 애니 보장
-              d={LEFT_LINE_D}
-              style={{ ...segStyle, strokeDashoffset: animLeftLine ? 100 : 0 }}
-              className={animLeftLine ? animClass : ""}
+            <line
+              ref={refLeft}
+              x1={leftLine.x1} y1={leftLine.y}
+              x2={leftLine.x2} y2={leftLine.y}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              className="smooth-stroke"
             />
           )}
 
-          {/* 2) 왼쪽 하트 반쪽 */}
-          {showHeartL && (
-            <path
-              key={`HL-${current}`}
-              d={PATH_HEART_L}
-              style={{ ...segStyle, strokeDashoffset: animHeartL ? 100 : 0 }}
-              className={animHeartL ? animClass : ""}
-            />
+          {/* 하트(세로 스케일: pivot=B) */}
+          <g transform={`translate(0 ${B}) scale(1 ${heartScaleY}) translate(0 ${-B})`}>
+            {/* 2: 하트 왼쪽 */}
+            {showHeartL && (
+              <path
+                ref={refHL}
+                d={heartLeftPathD}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                className="smooth-stroke"
+              />
+            )}
+            {/* 3: 하트 오른쪽 */}
+            {showHeartR && (
+              <path
+                ref={refHR}
+                d={heartRightPathD}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                className="smooth-stroke"
+              />
+            )}
+          </g>
+
+          {/*  하트 최하단 갭 */}
+          {(showHeartL || showHeartR) && (
+            <circle cx="150" cy={B} r={gapRadius} fill={gapColor} />
           )}
 
-          {/* 3) 오른쪽 하트 반쪽 */}
-          {showHeartR && (
-            <path
-              key={`HR-${current}`}
-              d={PATH_HEART_R}
-              style={{ ...segStyle, strokeDashoffset: animHeartR ? 100 : 0 }}
-              className={animHeartR ? animClass : ""}
-            />
-          )}
-
-          {/* 4) 오른쪽 선분 */}
+          {/* 4: 오른쪽 선분 */}
           {showRightLine && (
-            <path
-              key={`R-${current}`}
-              d={RIGHT_LINE_D}
-              style={{ ...segStyle, strokeDashoffset: animRightLine ? 100 : 0 }}
-              className={animRightLine ? animClass : ""}
+            <line
+              ref={refRight}
+              x1={rightLine.x1} y1={rightLine.y}
+              x2={rightLine.x2} y2={rightLine.y}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              className="smooth-stroke"
             />
           )}
         </svg>

@@ -34,7 +34,7 @@ export default function Optional_Etc({
           </button>
           <button
             onClick={onNext}
-            className="px-4 h-10 rounded-xl bg-[#FF6C43] text-white border border-[#FF6C43] hover:brightness-95 active:scale-95 transition"
+            className="px-4 h-10 rounded-xl bg-indigo-600 text-white border border-[#FF6C43] hover:brightness-95 active:scale-95 transition"
           >
             결과 보기
           </button>
