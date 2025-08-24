@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { postRecommend } from "../api/recommend.js";
 import { reverseGeocode } from "../components/reverseGeocode.js";
+import { loadNaverMaps } from "../components/naverLoader.jsx";
 
-/* ---------- 유틸 ---------- */
+/* ---------- 공통 유틸 ---------- */
 const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
 const tryParseJSON = (v) => {
   if (typeof v !== "string") return null;
@@ -23,7 +24,6 @@ const minutesToLabel = (min) => {
   if (h > 0) return `${h}시간`;
   return `${m}분`;
 };
-
 const deepCollectArrays = (obj) => {
   const arrays = [];
   const seen = new Set();
@@ -41,8 +41,6 @@ const deepCollectArrays = (obj) => {
   }
   return arrays;
 };
-
-/* ---------- 키 매핑 & 정규화 (Optional_Result와 동일) ---------- */
 const getAny = (o, keys = []) => {
   for (const k of keys) {
     if (o && k in o && isNonEmpty(o[k])) return o[k];
@@ -50,6 +48,7 @@ const getAny = (o, keys = []) => {
   return undefined;
 };
 
+/* ---------- 정규화 (Optional_Result와 동일) ---------- */
 function normalizeStop(stopRaw = {}) {
   const name = getAny(stopRaw, ["name", "장소명", "place", "title", "label"]);
   const desc = getAny(stopRaw, ["desc", "description", "설명", "summary", "explain", "text"]);
@@ -71,7 +70,6 @@ function normalizeStop(stopRaw = {}) {
     _original: stopRaw,
   };
 }
-
 function normalizeCourse(courseRaw = {}, idx = 0) {
   const stopsArr =
     getAny(courseRaw, ["stops", "스톱", "Stops"]) ||
@@ -94,15 +92,11 @@ function normalizeCourse(courseRaw = {}, idx = 0) {
     _original: courseRaw,
   };
 }
-
 const toCourseCard = (normCourse, i, groupTag = "courses") => {
   const firstImg = normCourse.stops.find((s) => s.photo_url)?.photo_url || "";
   const names = normCourse.stops.map((s) => s.name).filter(Boolean);
   const cats = Array.from(new Set(normCourse.stops.map((s) => s.category).filter(Boolean)));
-  const tods = Array.from(
-    new Set(normCourse.stops.map((s) => s.suggested_time_of_day).filter(Boolean))
-  );
-
+  const tods = Array.from(new Set(normCourse.stops.map((s) => s.suggested_time_of_day).filter(Boolean)));
   return {
     id: normCourse.id ?? `${groupTag}-${i}`,
     title: normCourse.title ?? `코스 ${i + 1}`,
@@ -117,7 +111,6 @@ const toCourseCard = (normCourse, i, groupTag = "courses") => {
     raw: normCourse,
   };
 };
-
 const toCardFromString = (s, i, tag) => ({
   id: `${tag || "item"}-${i}`,
   title: `추천 항목 ${i + 1}`,
@@ -138,12 +131,10 @@ const toCardFromObj = (o, i, tag) => ({
   tags: o.tags || o.keywords || o.hashtags || (tag ? [tag] : []),
   raw: o,
 });
-
 function extractCourseGroups(input) {
   let data = input;
   const parsed = tryParseJSON(data);
   if (parsed) data = parsed;
-
   const groups = [];
   const isCourseArray = (arr) =>
     Array.isArray(arr) && arr.length > 0 && arr.every((c) => {
@@ -156,7 +147,6 @@ function extractCourseGroups(input) {
     groups.push({ title: "코스", cards });
     return groups;
   }
-
   if (data && typeof data === "object") {
     if (isCourseArray(data.courses)) {
       const cards = data.courses.map((c, i) => toCourseCard(normalizeCourse(c, i), i, "courses"));
@@ -182,7 +172,6 @@ function extractCourseGroups(input) {
   }
   return groups;
 }
-
 function normalizeGeneric(input) {
   let result = input;
   const parsed = tryParseJSON(result);
@@ -195,7 +184,6 @@ function normalizeGeneric(input) {
       typeof x === "string" ? toCardFromString(x, i) : toCardFromObj(x, i)
     );
   }
-
   if (result && typeof result === "object") {
     const common = ["places", "results", "items", "data", "courses", "list", "entries", "suggestions", "options"];
     for (const key of common) {
@@ -220,7 +208,6 @@ function normalizeGeneric(input) {
     if (stringPairs.length)
       return stringPairs.map(([k, v], i) => toCardFromObj({ title: k, description: v }, i, "fields"));
   }
-
   if (typeof result === "string") return [toCardFromString(result, 0)];
   return [];
 }
@@ -246,7 +233,6 @@ function FragmentKV({ k, v }) {
     </>
   );
 }
-
 function CourseDetailModal({ open, course, onClose }) {
   useEffect(() => {
     if (!open) return;
@@ -341,9 +327,36 @@ function CourseDetailModal({ open, course, onClose }) {
   );
 }
 
-/* ---------- 주소 우선 + 지터 + 더 정확한 위치 대기 ---------- */
-// 좌표 → 주소 문자열(도로명 > 지번 > 행정동)
+/* ---------- 주소 우선 + 더 정확한 위치 대기 + 지터 재시도 ---------- */
+// 네이버 SDK를 확실히 로드한 뒤, 도로명 → 지번 → 폴백(reverseGeocode) 순으로 주소 확보
 async function resolveLocationString(lat, lng) {
+  try { await loadNaverMaps(); } catch {}
+  const nv = window.naver?.maps;
+
+  if (nv?.Service?.reverseGeocode) {
+    const coords = new nv.LatLng(lat, lng);
+    const geocode = (order) =>
+      new Promise((resolve) => {
+        nv.Service.reverseGeocode(
+          { coords, orders: order },
+          (_status, res) => {
+            try {
+              const a = res?.v2?.address;
+              const s =
+                order === nv.Service.OrderType.ROAD_ADDR
+                  ? (a?.roadAddress || "")
+                  : (a?.jibunAddress || "");
+              resolve((s || "").trim());
+            } catch { resolve(""); }
+          }
+        );
+      });
+    const road = await geocode(nv.Service.OrderType.ROAD_ADDR);
+    if (road) return road;
+    const jibun = await geocode(nv.Service.OrderType.ADDR);
+    if (jibun) return jibun;
+  }
+
   try {
     const r = await reverseGeocode({ lat, lng });
     const road = (r?.road || "").trim();
@@ -354,6 +367,37 @@ async function resolveLocationString(lat, lng) {
     return "";
   }
 }
+// 더 정확한 위치를 잠깐(기본 2.5s) 수집
+function getBestGeoFix(timeoutMs = 15000, settleMs = 2500) {
+  return new Promise((resolve) => {
+    if (!("geolocation" in navigator)) {
+      resolve({ lat: 37.5665, lng: 126.9780 });
+      return;
+    }
+    let best = null;
+    let settleTimer = null;
+    let hardTimer = null;
+
+    const done = () => {
+      try { navigator.geolocation.clearWatch(watchId); } catch {}
+      clearTimeout(settleTimer);
+      clearTimeout(hardTimer);
+      if (best) resolve({ lat: best.coords.latitude, lng: best.coords.longitude });
+      else resolve({ lat: 37.5665, lng: 126.9780 });
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (!best || (pos.coords.accuracy || 1e9) < (best.coords.accuracy || 1e9)) best = pos;
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs }
+    );
+
+    settleTimer = setTimeout(done, settleMs);
+    hardTimer = setTimeout(done, Math.max(settleMs + 1000, 4000));
+  });
+}
 // 좌표 지터(±meters m)
 function jitter(lat, lng, meters = 20) {
   const dx = (Math.random() * 2 - 1) * meters;
@@ -362,47 +406,15 @@ function jitter(lat, lng, meters = 20) {
   const dLng = dx / (111320 * Math.cos((lat * Math.PI) / 180));
   return { lat: lat + dLat, lng: lng + dLng };
 }
-// 더 정확한 위치를 2.5초 동안 기다리며 수집
-function getBestGeoFix(timeoutMs = 15000, settleMs = 2500) {
-  return new Promise((resolve) => {
-    if (!("geolocation" in navigator)) {
-      resolve({ lat: 37.5665, lng: 126.9780 });
-      return;
-    }
-    let best = null;
-    let timer = null;
-    const done = () => {
-      try { navigator.geolocation.clearWatch(watchId); } catch {}
-      clearTimeout(timer);
-      if (best) resolve({ lat: best.coords.latitude, lng: best.coords.longitude });
-      else resolve({ lat: 37.5665, lng: 126.9780 });
-    };
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!best || (pos.coords.accuracy || 1e9) < (best.coords.accuracy || 1e9)) {
-          best = pos;
-        }
-      },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs }
-    );
-    timer = setTimeout(done, settleMs);
-    // 백업: 너무 오래 끌면 강제 종료
-    setTimeout(done, Math.max(settleMs + 1000, 3000));
-  });
-}
-// payload 생성: 주소면 lat/lng를 넣지 않음(중요)
+// payload: 주소 문자열이면 lat/lng 제외(서버가 좌표 역지오코딩을 타지 않도록)
 function buildPayload({ dateISO, timeLabel, locationStr, lat, lng }) {
   const base = { date: dateISO, time: timeLabel, location: locationStr, etc: "" };
   const isCoordStr = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(locationStr);
-  if (isCoordStr) {
-    base.lat = lat;
-    base.lng = lng;
-  }
+  if (isCoordStr) { base.lat = lat; base.lng = lng; }
   return base;
 }
 
-/* ---------- 페이지 컴포넌트 ---------- */
+/* ---------- 페이지 ---------- */
 export default function Recommendation_AI({ onPrev, onNext }) {
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState("");
@@ -420,15 +432,16 @@ export default function Recommendation_AI({ onPrev, onNext }) {
     setResult(null);
 
     (async () => {
-      // 더 정확한 위치를 잠깐 기다림
+      // 1) 더 정확한 위치를 잠깐 기다림
       let { lat, lng } = await getBestGeoFix(15000, 2500);
 
-      // 주소 우선
+      // 2) 주소 우선 확보
       let locationStr = await resolveLocationString(lat, lng);
-      if (!locationStr) locationStr = `${lng},${lat}`; // 최후 폴백
+      if (!locationStr) locationStr = `${lng},${lat}`;
 
+      // 3) 호출 + 404(VWorld) 시 지터 재시도
       let attempts = 0;
-      const maxAttempts = 3; // 최초 1회 + 지터 2회
+      const maxAttempts = 3; // 최초 1회 + 2회 지터
       while (attempts < maxAttempts) {
         try {
           const payload = buildPayload({ dateISO, timeLabel, locationStr, lat, lng });
@@ -436,7 +449,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
           if (!alive) return;
           setResult(data);
           setError("");
-          break; // 성공
+          break;
         } catch (e) {
           if (!alive) return;
           const msg = e?.message || "";
@@ -481,18 +494,6 @@ export default function Recommendation_AI({ onPrev, onNext }) {
             <p className="text-sm text-gray-500 mt-1">
               기준: <b>{dateISO}</b> {timeLabel} · 장소: <b>현위치</b> · 추가정보: 없음
             </p>
-          </div>
-          <div className="flex gap-2">
-            {onPrev && (
-              <button className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95" onClick={onPrev}>
-                이전
-              </button>
-            )}
-            {onNext && (
-              <button className="px-3 h-9 rounded-lg border text-sm hover:bg-gray-50 active:scale-95" onClick={onNext}>
-                다음
-              </button>
-            )}
           </div>
         </div>
 
