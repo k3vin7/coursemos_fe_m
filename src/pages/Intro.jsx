@@ -125,7 +125,7 @@ export default function Intro({
           type="button"
           data-swipe-ignore
           onClick={onUserButtonClick}
-          className="absolute top-4 right-4 z-[60] h-10 px-3 rounded-xl border border-gray-200 bg-white/90 shadow text-sm font-medium hover:bg-white active:scale-95"
+          className="absolute top-4 right-4 z-[60] h-10 px-3 rounded-xl border bg-white/90 shadow text-lg font-medium hover:bg-white active:scale-95"
         >
           {isAuthed ? "☰" : "로그인"}
         </button>
