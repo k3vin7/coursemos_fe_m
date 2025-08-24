@@ -579,7 +579,8 @@ export default function Optional_Result({
     const t = setTimeout(() => {
       setDevResult(buildDummyResult());
       setDevLoading(false);
-    }, 5000); // ★ 5초 로딩 후 표시
+    }, 1000); // ★ 5초
+    //  로딩 후 표시
     return () => clearTimeout(t);
   }, [useMock]);
 
