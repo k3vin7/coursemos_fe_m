@@ -1,6 +1,7 @@
 // src/pages/Optional_Result.jsx
 import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import LoadingOverlay from "../components/LoadingOverlay.jsx"; // ★ 추가
 
 /* ---------- 유틸 ---------- */
 const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
@@ -499,6 +500,60 @@ function CourseDetailModal({ open, course, onClose }) {
   );
 }
 
+/* ---------- 개발용 더미 + 모의 모드 ---------- */
+const USE_MOCK = false; // 항상 모의 테스트하려면 true
+function buildDummyResult() {
+  return {
+    courses: [
+      {
+        id: "r1",
+        title: "성수-서울숲 산책",
+        total_estimated_minutes: 150,
+        stops: [
+          {
+            name: "서울숲 메타세쿼이아길",
+            category: "산책",
+            typical_duration_min: 45,
+            photo_url: "https://picsum.photos/seed/seoulforest/800/600",
+            desc: "산책과 가벼운 사진 찍기 좋은 코스",
+          },
+          {
+            name: "성수 카페거리",
+            category: "카페",
+            typical_duration_min: 60,
+            photo_url: "https://picsum.photos/seed/seongsu/800/600",
+          },
+          {
+            name: "핫한 편집숍",
+            category: "쇼핑",
+            typical_duration_min: 45,
+            photo_url: "https://picsum.photos/seed/editshop/800/600",
+          },
+        ],
+      },
+      {
+        id: "r2",
+        title: "이태원 전망 야경",
+        total_estimated_minutes: 120,
+        stops: [
+          {
+            name: "남산공원 둘레길",
+            category: "산책",
+            typical_duration_min: 50,
+            photo_url: "https://picsum.photos/seed/namsan/800/600",
+          },
+          {
+            name: "뷰맛집 루프탑",
+            category: "포토",
+            typical_duration_min: 70,
+            photo_url: "https://picsum.photos/seed/rooftop/800/600",
+          },
+        ],
+      },
+    ],
+  };
+}
+
 /* ---------- 컴포넌트 ---------- */
 export default function Optional_Result({
   onPrev,
@@ -507,32 +562,58 @@ export default function Optional_Result({
   error,
   result,
 }) {
+  // 모의 모드 감지
+  const useMock =
+    USE_MOCK ||
+    (typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("mock") === "1");
+
+  // 모의 상태
+  const [devLoading, setDevLoading] = useState(false);
+  const [devError, setDevError] = useState("");
+  const [devResult, setDevResult] = useState(null);
+
+  useEffect(() => {
+    if (!useMock) return;
+    setDevLoading(true);
+    const t = setTimeout(() => {
+      setDevResult(buildDummyResult());
+      setDevLoading(false);
+    }, 5000); // ★ 5초 로딩 후 표시
+    return () => clearTimeout(t);
+  }, [useMock]);
+
+  // 실제 vs 모의 적용
+  const mLoading = useMock ? devLoading : !!loading;
+  const mError   = useMock ? devError   : (error || "");
+  const mResult  = useMock ? devResult  : result;
+
   const [selected, setSelected] = useState(null);
 
   const { courseGroups, fallbackCards } = useMemo(() => {
     try {
-      const groups = extractCourseGroups(result);
+      const groups = extractCourseGroups(mResult);
       if (groups.length > 0) return { courseGroups: groups, fallbackCards: [] };
-      return { courseGroups: [], fallbackCards: normalizeGeneric(result) };
+      return { courseGroups: [], fallbackCards: normalizeGeneric(mResult) };
     } catch {
       return { courseGroups: [], fallbackCards: [] };
     }
-  }, [result]);
+  }, [mResult]);
 
   // 서버가 { detail: "..."} 형태만 보낸 경우도 안전하게 노출
   const serverDetail =
-    !loading && !error && isPlainObject(result) && isNonEmpty(result?.detail)
-      ? String(result.detail)
+    !mLoading && !mError && isPlainObject(mResult) && isNonEmpty(mResult?.detail)
+      ? String(mResult.detail)
       : "";
 
   return (
-    <div className="h-screen w-screen overflow-y-auto px-4 py-6">
+    <div className={`h-screen w-screen px-4 py-6 ${mLoading ? "overflow-hidden" : "overflow-y-auto"}`}>
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">추천 결과</h1>
         </div>
 
-        {loading && (
+        {mLoading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
               <div
@@ -550,20 +631,20 @@ export default function Optional_Result({
           </div>
         )}
 
-        {!loading && error && (
+        {!mLoading && mError && (
           <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4">
-            오류: {error}
+            오류: {mError}
           </div>
         )}
 
-        {!loading && !error && serverDetail && (
+        {!mLoading && !mError && serverDetail && (
           <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4 mb-4">
             {serverDetail}
           </div>
         )}
 
         {/* 코스 섹션 */}
-        {!loading && !error && courseGroups.length > 0 && (
+        {!mLoading && !mError && courseGroups.length > 0 && (
           <div className="space-y-8">
             {courseGroups.map((g, gi) => (
               <section key={gi}>
@@ -632,7 +713,7 @@ export default function Optional_Result({
         )}
 
         {/* 코스가 없을 때: 범용 카드 */}
-        {!loading && !error && courseGroups.length === 0 && safeArray(fallbackCards).length > 0 && (
+        {!mLoading && !mError && courseGroups.length === 0 && safeArray(fallbackCards).length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {safeArray(fallbackCards).map((c, i) => (
               <article
@@ -680,13 +761,25 @@ export default function Optional_Result({
           </div>
         )}
 
-        {!loading && !error && courseGroups.length === 0 && (!fallbackCards || safeArray(fallbackCards).length === 0) && (
+        {!mLoading && !mError && courseGroups.length === 0 && (!fallbackCards || safeArray(fallbackCards).length === 0) && (
           <div className="text-gray-500">표시할 결과가 없어요.</div>
         )}
       </div>
 
       {/* 상세 모달 */}
       <CourseDetailModal open={!!selected} course={selected} onClose={() => setSelected(null)} />
+
+      {/* ★ 풀스크린 로딩 오버레이 */}
+      <LoadingOverlay
+        open={mLoading && !selected}
+        hints={[
+          "오늘은 날씨가 좋네요! ☀️",
+          "근처 분위기를 파악하는 중…",
+          "사람 덜 붐비는 곳을 찾는 중…",
+          "사진이 예쁜 스팟을 고르는 중…",
+          "이동 동선을 최적화하는 중…",
+        ]}
+      />
     </div>
   );
 }
