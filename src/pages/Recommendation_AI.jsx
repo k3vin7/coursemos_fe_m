@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { postRecommend } from "../api/recommend.js";
+import { reverseGeocode } from "../components/reverseGeocode.js";
 
 /* ---------- 유틸 ---------- */
 const isNonEmpty = (v) => v !== undefined && v !== null && `${v}`.trim() !== "";
@@ -395,11 +396,11 @@ export default function Recommendation_AI({ onPrev, onNext }) {
     setError("");
     setResult(null);
 
-    // 현위치 가져오기
+    // 현위치 가져오기 (fallback: 서울시청)
     const getGeo = () =>
       new Promise((resolve) => {
         if (!("geolocation" in navigator)) {
-          resolve({ lat: 37.5665, lng: 126.9780 }); // 서울 시청 좌표 fallback
+          resolve({ lat: 37.5665, lng: 126.9780 });
           return;
         }
         navigator.geolocation.getCurrentPosition(
@@ -412,10 +413,17 @@ export default function Recommendation_AI({ onPrev, onNext }) {
     (async () => {
       const { lat, lng } = await getGeo();
 
+      // ✅ 먼저 주소를 얻어서 location에 주소를 넣고, 없으면 "lng,lat"로 폴백
+      let addr = "";
+      try {
+        const r = await reverseGeocode({ lat, lng });
+        addr = (r?.jibun || r?.road || "").trim();
+      } catch {}
+
       const payload = {
         date: dateISO,
         time: timeLabel,
-        location: `${lng},${lat}`, // 주소가 없으면 "lng,lat"로
+        location: addr || `${lng},${lat}`,
         lat,
         lng,
         etc: "",
@@ -427,7 +435,14 @@ export default function Recommendation_AI({ onPrev, onNext }) {
         setResult(data);
       } catch (e) {
         if (!alive) return;
-        setError(e?.message || "추천 요청 실패");
+        // 404(VWorld 미스) 등도 사용자 친화적으로 안내
+        const msg = e?.message || "";
+        const isVWorldMiss = /VWorld 결과 없음/i.test(msg) || /404/.test(msg);
+        setError(
+          isVWorldMiss
+            ? "현위치가 도로/경계선으로 잡혀 주소를 찾지 못했어요. 장소 단계에서 지도로 정확한 위치를 선택해 보세요."
+            : (msg || "추천 요청 실패")
+        );
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -497,7 +512,7 @@ export default function Recommendation_AI({ onPrev, onNext }) {
         {/* 에러 */}
         {!loading && error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 text-red-700 p-4">
-            오류: {error}
+            {error}
           </div>
         )}
 
