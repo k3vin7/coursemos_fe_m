@@ -416,7 +416,7 @@ function buildPayload({ dateISO, timeLabel, locationStr, lat, lng }) {
 }
 
 // ★ 개발용 더미 데이터
-const USE_MOCK = true; // 개발 테스트 시 true 로 켜두면 항상 더미로 동작
+const USE_MOCK = false; // 개발 테스트 시 true 로 켜두면 항상 더미로 동작
 
 function buildDummyResult() {
   // extractCourseGroups 가 인식하는 구조: { courses: [ {stops:[...] } ] }

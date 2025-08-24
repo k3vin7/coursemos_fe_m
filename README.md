@@ -1,4 +1,5 @@
 # CourseMos_FE
+coursemosfe.vercel.app
 
 🌌 **CourseMos_FE**  
 AI 기반 데이트 코스 추천 서비스
